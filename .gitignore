@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions (do not ignore sdk/ directory)
+# *.so is kept in sdk/hikvision/lib
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Pytest / coverage cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large raw vendor SDK archive (Runtime libraries are included in sdk/hikvision/lib)
+HCNetSDKV6.1.11.30*

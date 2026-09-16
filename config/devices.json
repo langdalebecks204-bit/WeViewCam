@@ -1,0 +1,47 @@
+[
+  {
+    "device_id": "hik_demo_01",
+    "name": "海康威视演示设备",
+    "ip": "192.168.1.64",
+    "port": 8000,
+    "username": "admin",
+    "password": "",
+    "protocol": "hikvision",
+    "rtsp_port": 554,
+    "channels": [
+      {
+        "channel_no": 1,
+        "name": "通道 1 - 主大门球机",
+        "is_online": true,
+        "is_ptz": true,
+        "device_id": "hik_demo_01",
+        "extra": {}
+      },
+      {
+        "channel_no": 2,
+        "name": "通道 2 - 停车场出入口",
+        "is_online": true,
+        "is_ptz": false,
+        "device_id": "hik_demo_01",
+        "extra": {}
+      },
+      {
+        "channel_no": 3,
+        "name": "通道 3 - 办公大楼大厅",
+        "is_online": true,
+        "is_ptz": false,
+        "device_id": "hik_demo_01",
+        "extra": {}
+      },
+      {
+        "channel_no": 4,
+        "name": "通道 4 - 园区周界围栏",
+        "is_online": true,
+        "is_ptz": false,
+        "device_id": "hik_demo_01",
+        "extra": {}
+      }
+    ],
+    "extra": {}
+  }
+]
