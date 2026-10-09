@@ -48,8 +48,10 @@ public class LiveViewFragment extends Fragment {
     private final SurveillanceSurfaceView[] viewports = new SurveillanceSurfaceView[4];
     private SurveillanceSurfaceView activeViewport;
 
-    private Spinner spinnerCameraSelect;
+    private Button btnActiveViewport;
+    private Button btnChannelSelect;
     private Button btnLivePlay;
+    private Button btnPlayAll;
     private Button btnToggleSplit;
     private Button btnStreamQuality;
     private Button btnLiveSnapshot;
@@ -64,7 +66,6 @@ public class LiveViewFragment extends Fragment {
     private int currentStreamType = 1; // 0-main, 1-sub (default to sub-stream for multi-split fluency)
     private boolean isRecording = false;
     private int ptzSpeed = 4;
-    private boolean isSpinnerInitialized = false;
 
     private DeviceManager deviceManager;
     private final List<ChannelInfo> allChannels = new ArrayList<>();
@@ -103,8 +104,10 @@ public class LiveViewFragment extends Fragment {
         viewports[2] = root.findViewById(R.id.viewport_2);
         viewports[3] = root.findViewById(R.id.viewport_3);
 
-        spinnerCameraSelect = root.findViewById(R.id.spinner_camera_select);
+        btnActiveViewport = root.findViewById(R.id.btn_active_viewport);
+        btnChannelSelect = root.findViewById(R.id.btn_channel_select);
         btnLivePlay = root.findViewById(R.id.btn_live_play);
+        btnPlayAll = root.findViewById(R.id.btn_play_all);
         btnToggleSplit = root.findViewById(R.id.btn_toggle_split);
         btnStreamQuality = root.findViewById(R.id.btn_stream_quality);
         btnStreamQuality.setText(currentStreamType == 0 ? "主码流" : "子码流");
@@ -121,33 +124,118 @@ public class LiveViewFragment extends Fragment {
         SurveillanceSurfaceView.OnViewportClickListener listener = new SurveillanceSurfaceView.OnViewportClickListener() {
             @Override
             public void onViewportClicked(SurveillanceSurfaceView viewport) {
-                selectViewport(viewport);
+                if (activeViewport == viewport) {
+                    // Tap on already active viewport opens channel picker directly
+                    showChannelPickerDialog(viewport);
+                } else {
+                    selectViewport(viewport);
+                }
             }
 
             @Override
             public void onViewportDoubleClicked(SurveillanceSurfaceView viewport) {
+                selectViewport(viewport);
                 toggleMaximizeViewport(viewport);
+            }
+
+            @Override
+            public void onViewportLongClicked(SurveillanceSurfaceView viewport) {
+                selectViewport(viewport);
+                showChannelPickerDialog(viewport);
             }
         };
 
-        for (SurveillanceSurfaceView vp : viewports) {
-            vp.setOnViewportClickListener(listener);
+        for (int i = 0; i < viewports.length; i++) {
+            viewports[i].setViewportIndex(i);
+            viewports[i].setOnViewportClickListener(listener);
         }
+        viewportSingle.setViewportIndex(-1);
         viewportSingle.setOnViewportClickListener(listener);
 
         selectViewport(viewports[0]);
     }
 
     private void selectViewport(SurveillanceSurfaceView viewport) {
+        if (viewport == null) return;
         if (activeViewport != null) {
             activeViewport.setSelectedViewport(false);
         }
         activeViewport = viewport;
-        if (activeViewport != null) {
-            activeViewport.setSelectedViewport(true);
-            updateSpinnerSelection(activeViewport.getChannelInfo());
-            updateLivePlayButtonState();
+        activeViewport.setSelectedViewport(true);
+
+        updateActiveViewportBadge();
+        updateChannelSelectButton(activeViewport.getChannelInfo());
+        updateLivePlayButtonState();
+    }
+
+    private void updateActiveViewportBadge() {
+        if (btnActiveViewport == null) return;
+        if (!is4Split) {
+            btnActiveViewport.setText("单画面");
+            return;
         }
+        int index = getViewportIndex(activeViewport);
+        String[] titles = new String[]{"视口 1", "视口 2", "视口 3", "视口 4"};
+        if (index >= 0 && index < titles.length) {
+            btnActiveViewport.setText(titles[index]);
+        } else {
+            btnActiveViewport.setText("视口 1");
+        }
+    }
+
+    private int getViewportIndex(SurveillanceSurfaceView vp) {
+        for (int i = 0; i < viewports.length; i++) {
+            if (viewports[i] == vp) return i;
+        }
+        return -1;
+    }
+
+    private void updateChannelSelectButton(ChannelInfo info) {
+        if (btnChannelSelect == null) return;
+        if (info != null) {
+            String status = info.isOnline() ? " [在线] ▼" : " [离线] ▼";
+            btnChannelSelect.setText(info.getName() + status);
+        } else {
+            btnChannelSelect.setText("选择通道 ▼");
+        }
+    }
+
+    private void showChannelPickerDialog(SurveillanceSurfaceView targetViewport) {
+        if (allChannels.isEmpty()) {
+            Toast.makeText(getContext(), "暂无可用通道，请先在设备管理中添加并测试连接设备", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        SurveillanceSurfaceView vp = (targetViewport != null) ? targetViewport : (activeViewport != null ? activeViewport : viewports[0]);
+        int vpIndex = getViewportIndex(vp);
+        String vpTitle = (vpIndex >= 0) ? ("【视口 " + (vpIndex + 1) + "】") : "【单画面】";
+
+        String[] channelLabels = new String[allChannels.size()];
+        int selectedPos = -1;
+        for (int i = 0; i < allChannels.size(); i++) {
+            ChannelInfo ch = allChannels.get(i);
+            String status = ch.isOnline() ? " [在线]" : " [离线]";
+            channelLabels[i] = ch.getName() + status;
+            if (vp.getChannelInfo() != null &&
+                vp.getChannelInfo().getChannelNo() == ch.getChannelNo() &&
+                vp.getChannelInfo().getDeviceId().equals(ch.getDeviceId())) {
+                selectedPos = i;
+            }
+        }
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("选择 " + vpTitle + " 播放通道")
+                .setSingleChoiceItems(channelLabels, selectedPos, (dialog, which) -> {
+                    dialog.dismiss();
+                    if (which >= 0 && which < allChannels.size()) {
+                        ChannelInfo chosen = allChannels.get(which);
+                        selectViewport(vp);
+                        startPlayOnViewport(vp, chosen);
+                        Toast.makeText(getContext(), "视口 " + (vpIndex + 1) + " 已切换到: " + chosen.getName(), Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private void toggleMaximizeViewport(SurveillanceSurfaceView viewport) {
@@ -175,10 +263,28 @@ public class LiveViewFragment extends Fragment {
                 startPlayOnViewport(viewports[0], viewports[0].getChannelInfo());
             }
         }
+        updateActiveViewportBadge();
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private void setupListeners() {
+        btnActiveViewport.setOnClickListener(v -> {
+            if (!is4Split) {
+                Toast.makeText(getContext(), "当前处于单画面模式，双击画面或点击'四分屏'可返回", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            int current = getViewportIndex(activeViewport);
+            int next = (current + 1) % 4;
+            selectViewport(viewports[next]);
+            Toast.makeText(getContext(), "已切换操作视口: 视口 " + (next + 1), Toast.LENGTH_SHORT).show();
+        });
+
+        btnChannelSelect.setOnClickListener(v -> {
+            showChannelPickerDialog(activeViewport);
+        });
+
+        btnPlayAll.setOnClickListener(v -> togglePlayAll());
+
         btnLivePlay.setOnClickListener(v -> toggleLivePlay());
 
         btnToggleSplit.setOnClickListener(v -> {
@@ -311,38 +417,17 @@ public class LiveViewFragment extends Fragment {
             allChannels.addAll(dev.getChannels());
         }
 
-        List<String> labels = new ArrayList<>();
-        for (ChannelInfo ch : allChannels) {
-            String status = ch.isOnline() ? " [在线]" : " [离线]";
-            labels.add(ch.getName() + status);
-        }
-
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, labels);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinnerCameraSelect.setAdapter(adapter);
-
-        isSpinnerInitialized = false;
-        spinnerCameraSelect.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (!isSpinnerInitialized) {
-                    isSpinnerInitialized = true;
-                    return; // Prevent auto-play upon initial spinner setup
-                }
-                if (position >= 0 && position < allChannels.size() && activeViewport != null) {
-                    ChannelInfo selected = allChannels.get(position);
-                    startPlayOnViewport(activeViewport, selected);
-                }
-            }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
-        });
-
         // Assign first 4 channels to viewports WITHOUT auto-playing video
         for (int i = 0; i < 4 && i < allChannels.size(); i++) {
             ChannelInfo ch = allChannels.get(i);
             viewports[i].setChannelInfo(ch);
         }
+
+        if (activeViewport != null) {
+            updateChannelSelectButton(activeViewport.getChannelInfo());
+        }
         updateLivePlayButtonState();
+        updatePlayAllButtonState();
     }
 
     private void toggleLivePlay() {
@@ -350,12 +435,64 @@ public class LiveViewFragment extends Fragment {
         if (activeViewport.getPlayHandle() >= 0) {
             stopPlayOnViewport(activeViewport);
         } else {
-            if (activeViewport.getChannelInfo() != null) {
-                startPlayOnViewport(activeViewport, activeViewport.getChannelInfo());
+            ChannelInfo target = activeViewport.getChannelInfo();
+            if (target == null && !allChannels.isEmpty()) {
+                int idx = getViewportIndex(activeViewport);
+                if (idx >= 0 && idx < allChannels.size()) {
+                    target = allChannels.get(idx);
+                } else {
+                    target = allChannels.get(0);
+                }
+                activeViewport.setChannelInfo(target);
+            }
+            if (target != null) {
+                startPlayOnViewport(activeViewport, target);
             } else {
-                Toast.makeText(getContext(), "请先选择一个监控通道", Toast.LENGTH_SHORT).show();
+                showChannelPickerDialog(activeViewport);
             }
         }
+    }
+
+    private void togglePlayAll() {
+        if (!is4Split) {
+            toggleLivePlay();
+            return;
+        }
+
+        boolean anyPlaying = false;
+        for (SurveillanceSurfaceView vp : viewports) {
+            if (vp.getPlayHandle() >= 0) {
+                anyPlaying = true;
+                break;
+            }
+        }
+
+        if (anyPlaying) {
+            for (SurveillanceSurfaceView vp : viewports) {
+                stopPlayOnViewport(vp);
+            }
+            Toast.makeText(getContext(), "已停止所有视口播放", Toast.LENGTH_SHORT).show();
+        } else {
+            int startedCount = 0;
+            for (int i = 0; i < viewports.length; i++) {
+                SurveillanceSurfaceView vp = viewports[i];
+                ChannelInfo ch = vp.getChannelInfo();
+                if (ch == null && i < allChannels.size()) {
+                    ch = allChannels.get(i);
+                    vp.setChannelInfo(ch);
+                }
+                if (ch != null) {
+                    startPlayOnViewport(vp, ch);
+                    startedCount++;
+                }
+            }
+            if (startedCount > 0) {
+                Toast.makeText(getContext(), "已开启 " + startedCount + " 个通道分屏实时监控", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(getContext(), "暂无可用通道进行播放", Toast.LENGTH_SHORT).show();
+            }
+        }
+        updatePlayAllButtonState();
     }
 
     private void stopPlayOnViewport(SurveillanceSurfaceView viewport) {
@@ -371,6 +508,7 @@ public class LiveViewFragment extends Fragment {
             viewport.setPlayHandle(-1);
         }
         updateLivePlayButtonState();
+        updatePlayAllButtonState();
     }
 
     private void updateLivePlayButtonState() {
@@ -381,22 +519,31 @@ public class LiveViewFragment extends Fragment {
                 requireContext(),
                 isPlaying ? R.color.status_red : R.color.primary
         ));
+        updatePlayAllButtonState();
     }
 
-    private void updateSpinnerSelection(ChannelInfo info) {
-        if (info == null) return;
-        for (int i = 0; i < allChannels.size(); i++) {
-            if (allChannels.get(i).getChannelNo() == info.getChannelNo() &&
-                allChannels.get(i).getDeviceId().equals(info.getDeviceId())) {
-                spinnerCameraSelect.setSelection(i);
+    private void updatePlayAllButtonState() {
+        if (btnPlayAll == null || getContext() == null) return;
+        boolean anyPlaying = false;
+        for (SurveillanceSurfaceView vp : viewports) {
+            if (vp != null && vp.getPlayHandle() >= 0) {
+                anyPlaying = true;
                 break;
             }
         }
+        btnPlayAll.setText(anyPlaying ? "全部停止" : "全部播放");
+        btnPlayAll.setTextColor(ContextCompat.getColor(
+                requireContext(),
+                anyPlaying ? R.color.status_red : R.color.text_primary
+        ));
     }
 
     private void startPlayOnViewport(SurveillanceSurfaceView viewport, ChannelInfo ch) {
         if (viewport == null || ch == null) return;
         viewport.setChannelInfo(ch);
+        if (viewport == activeViewport) {
+            updateChannelSelectButton(ch);
+        }
 
         // Stop current play handle if active
         if (viewport.getPlayHandle() >= 0) {
@@ -414,6 +561,7 @@ public class LiveViewFragment extends Fragment {
                     int handle = adapter.startRealPlay(ch.getChannelNo(), viewport.getHolder(), currentStreamType);
                     viewport.setPlayHandle(handle);
                     updateLivePlayButtonState();
+                    updatePlayAllButtonState();
                 }
             }
         }, 150);

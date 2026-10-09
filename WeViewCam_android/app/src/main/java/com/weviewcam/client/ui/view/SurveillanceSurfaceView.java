@@ -26,6 +26,7 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
     public interface OnViewportClickListener {
         void onViewportClicked(SurveillanceSurfaceView viewport);
         void onViewportDoubleClicked(SurveillanceSurfaceView viewport);
+        default void onViewportLongClicked(SurveillanceSurfaceView viewport) {}
     }
 
     private SurfaceView surfaceView;
@@ -36,6 +37,7 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
     private TextView tvTitle;
     private TextView tvStatus;
 
+    private int viewportIndex = -1;
     private ChannelInfo channelInfo;
     private int playHandle = -1;
     private boolean isSelected = false;
@@ -60,23 +62,31 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
 
     private void init(Context context) {
         setBackgroundColor(Color.BLACK);
+        setClickable(true);
+        setFocusable(true);
 
         surfaceView = new SurfaceView(context);
         surfaceView.getHolder().addCallback(this);
         surfaceView.getHolder().setFormat(PixelFormat.TRANSLUCENT);
         surfaceView.setZOrderMediaOverlay(true);
+        surfaceView.setClickable(false);
+        surfaceView.setFocusable(false);
         LayoutParams surfaceLp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         addView(surfaceView, surfaceLp);
 
         // Border overlay (Border only, transparent inside)
         borderView = new View(context);
         borderView.setBackgroundResource(R.drawable.bg_viewport_normal);
+        borderView.setClickable(false);
+        borderView.setFocusable(false);
         addView(borderView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
 
         // Top OSD Header
         FrameLayout osdLayout = new FrameLayout(context);
         osdLayout.setPadding(16, 12, 16, 12);
         osdLayout.setBackgroundColor(Color.parseColor("#80000000"));
+        osdLayout.setClickable(false);
+        osdLayout.setFocusable(false);
 
         tvTitle = new TextView(context);
         tvTitle.setTextColor(Color.WHITE);
@@ -97,7 +107,12 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
 
         gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override
-            public boolean onSingleTapConfirmed(MotionEvent e) {
+            public boolean onDown(MotionEvent e) {
+                return true; // Return true to ensure UP and subsequent gesture events are delivered
+            }
+
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
                 if (clickListener != null) {
                     clickListener.onViewportClicked(SurveillanceSurfaceView.this);
                 }
@@ -111,13 +126,46 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
                 }
                 return true;
             }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                if (clickListener != null) {
+                    clickListener.onViewportLongClicked(SurveillanceSurfaceView.this);
+                }
+            }
         });
 
-        setOnTouchListener((v, event) -> gestureDetector.onTouchEvent(event));
+        setOnClickListener(v -> {
+            if (clickListener != null) {
+                clickListener.onViewportClicked(SurveillanceSurfaceView.this);
+            }
+        });
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        return true;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (gestureDetector != null && gestureDetector.onTouchEvent(event)) {
+            return true;
+        }
+        return super.onTouchEvent(event);
     }
 
     public void setOnViewportClickListener(OnViewportClickListener listener) {
         this.clickListener = listener;
+    }
+
+    public void setViewportIndex(int index) {
+        this.viewportIndex = index;
+        updateOsdText();
+    }
+
+    public int getViewportIndex() {
+        return viewportIndex;
     }
 
     public void setSelectedViewport(boolean selected) {
@@ -131,21 +179,7 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
 
     public void setChannelInfo(ChannelInfo info) {
         this.channelInfo = info;
-        if (info != null) {
-            String onlineStr = info.isOnline() ? " [在线]" : " [离线]";
-            tvTitle.setText(info.getName() + onlineStr);
-            if (playHandle >= 0) {
-                tvStatus.setText("正在播放");
-                tvStatus.setTextColor(ContextCompat.getColor(getContext(), R.color.status_green));
-            } else {
-                tvStatus.setText(info.isOnline() ? "在线 (待播放)" : "离线");
-                tvStatus.setTextColor(ContextCompat.getColor(getContext(), R.color.text_secondary));
-            }
-        } else {
-            tvTitle.setText("未分配通道");
-            tvStatus.setText("空闲");
-            tvStatus.setTextColor(ContextCompat.getColor(getContext(), R.color.text_secondary));
-        }
+        updateOsdText();
     }
 
     public ChannelInfo getChannelInfo() {
@@ -154,15 +188,25 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
 
     public void setPlayHandle(int handle) {
         this.playHandle = handle;
-        if (handle >= 0) {
-            tvStatus.setText("正在播放");
-            tvStatus.setTextColor(ContextCompat.getColor(getContext(), R.color.status_green));
-        } else {
-            if (channelInfo != null) {
-                tvStatus.setText(channelInfo.isOnline() ? "已停止 (待播放)" : "离线");
+        updateOsdText();
+    }
+
+    private void updateOsdText() {
+        if (tvTitle == null || tvStatus == null) return;
+        String prefix = (viewportIndex >= 0) ? ("【视口 " + (viewportIndex + 1) + "】 ") : "";
+        if (channelInfo != null) {
+            String onlineStr = channelInfo.isOnline() ? " [在线]" : " [离线]";
+            tvTitle.setText(prefix + channelInfo.getName() + onlineStr);
+            if (playHandle >= 0) {
+                tvStatus.setText("正在播放");
+                tvStatus.setTextColor(ContextCompat.getColor(getContext(), R.color.status_green));
             } else {
-                tvStatus.setText("空闲");
+                tvStatus.setText(channelInfo.isOnline() ? "在线 (待播放)" : "离线");
+                tvStatus.setTextColor(ContextCompat.getColor(getContext(), R.color.text_secondary));
             }
+        } else {
+            tvTitle.setText(prefix + "未分配通道");
+            tvStatus.setText("空闲");
             tvStatus.setTextColor(ContextCompat.getColor(getContext(), R.color.text_secondary));
         }
     }

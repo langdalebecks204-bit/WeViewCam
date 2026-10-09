@@ -130,8 +130,8 @@ WeViewCam_android/
 构建生成的 APK 位于：
 - **开发构建输出**：`app/build/outputs/apk/debug/app-debug.apk`
 - **预编译发布安装包**：`weviewcam_android_v0.1.0.apk`
-  - 文件大小：`42,405,734` 字节 (约 40.44 MB)
-  - SHA-256 校验码：`191AF1820CB8A6CA7C480BCE57887839EEE47D87BA0C2267CDC5738B7DFC7A43`
+  - 文件大小：`41,576,418` 字节 (约 39.65 MB)
+  - SHA-256 校验码：`EB18C81155D54245D30916AD3897A704176FA49FF1F4D41F0E790FEA9372CB32`
   - 架构支持：`arm64-v8a`、`armeabi-v7a`、`armeabi`
 
 ---
