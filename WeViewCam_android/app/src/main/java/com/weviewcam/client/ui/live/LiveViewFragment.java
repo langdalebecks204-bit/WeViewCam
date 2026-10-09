@@ -43,6 +43,9 @@ import java.util.Map;
 public class LiveViewFragment extends Fragment {
     private static final String MODULE = "LiveView";
 
+    private LinearLayout layoutToolbar;
+    private View layoutToolbarRow1;
+    private View layoutToolbarRow2;
     private LinearLayout layoutLiveBody;
     private View videoContainer;
     private View gridLayout4;
@@ -99,6 +102,9 @@ public class LiveViewFragment extends Fragment {
     }
 
     private void initViews(View root) {
+        layoutToolbar = root.findViewById(R.id.layout_toolbar);
+        layoutToolbarRow1 = root.findViewById(R.id.layout_toolbar_row1);
+        layoutToolbarRow2 = root.findViewById(R.id.layout_toolbar_row2);
         layoutLiveBody = root.findViewById(R.id.layout_live_body);
         videoContainer = root.findViewById(R.id.video_container);
         gridLayout4 = root.findViewById(R.id.grid_layout_4);
@@ -601,6 +607,27 @@ public class LiveViewFragment extends Fragment {
     private void updateOrientationLayout(int orientation) {
         if (layoutLiveBody == null || videoContainer == null) return;
         boolean isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
+
+        if (layoutToolbar != null && layoutToolbarRow1 != null && layoutToolbarRow2 != null) {
+            if (isLandscape) {
+                layoutToolbar.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams p1 = new LinearLayout.LayoutParams(0, dpToPx(34), 1.0f);
+                layoutToolbarRow1.setLayoutParams(p1);
+                LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(0, dpToPx(34), 1.15f);
+                p2.setMarginStart(dpToPx(8));
+                p2.topMargin = 0;
+                layoutToolbarRow2.setLayoutParams(p2);
+            } else {
+                layoutToolbar.setOrientation(LinearLayout.VERTICAL);
+                LinearLayout.LayoutParams p1 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(34));
+                layoutToolbarRow1.setLayoutParams(p1);
+                LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(34));
+                p2.topMargin = dpToPx(4);
+                p2.setMarginStart(0);
+                layoutToolbarRow2.setLayoutParams(p2);
+            }
+        }
+
         if (isLandscape) {
             layoutLiveBody.setOrientation(LinearLayout.HORIZONTAL);
             LinearLayout.LayoutParams videoParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);

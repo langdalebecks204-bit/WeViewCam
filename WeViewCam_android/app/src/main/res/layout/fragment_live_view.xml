@@ -18,7 +18,7 @@
         android:paddingTop="4dp"
         android:paddingBottom="4dp">
 
-        <!-- Row 1: Channel & Split Mode Configuration (Always 100% visible, no scrolling) -->
+        <!-- Row 1: Channel & Split Mode Configuration (Unified heights and proportional weights) -->
         <LinearLayout
             android:id="@+id/layout_toolbar_row1"
             android:layout_width="match_parent"
@@ -28,31 +28,23 @@
 
             <Button
                 android:id="@+id/btn_active_viewport"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:minWidth="56dp"
-                android:paddingStart="6dp"
-                android:paddingEnd="6dp"
+                android:layout_weight="1"
                 android:text="视口 1"
-                android:textSize="11sp"
                 style="@style/SurveillanceAccentButton" />
 
             <Button
                 android:id="@+id/btn_channel_select"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1"
+                android:layout_weight="1.4"
                 android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:background="@drawable/bg_control_button"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
                 android:text="选择通道 ▼"
-                android:textColor="@color/text_primary"
-                android:textSize="11sp"
-                android:gravity="center_vertical|start"
+                android:gravity="center"
                 android:ellipsize="end"
-                android:maxLines="1" />
+                android:maxLines="1"
+                style="@style/SurveillanceButton" />
 
             <!-- Hidden spinner kept for compatibility -->
             <Spinner
@@ -63,33 +55,28 @@
 
             <Button
                 android:id="@+id/btn_toggle_split"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:minWidth="56dp"
-                android:paddingStart="6dp"
-                android:paddingEnd="6dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
                 android:text="四分屏"
-                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_stream_quality"
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="match_parent"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:minWidth="52dp"
-                android:paddingStart="6dp"
-                android:paddingEnd="6dp"
                 android:text="子码流"
-                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
         </LinearLayout>
 
-        <!-- Row 2: Live Controls & Action Buttons (Evenly spaced, always 100% visible, no scrolling) -->
+        <!-- Row 2: Live Controls & Action Buttons (Identical 34dp height and equal 1:1:1:1:1 distribution) -->
         <LinearLayout
             android:id="@+id/layout_toolbar_row2"
             android:layout_width="match_parent"
-            android:layout_height="32dp"
+            android:layout_height="34dp"
             android:layout_marginTop="4dp"
             android:orientation="horizontal"
             android:gravity="center_vertical">
@@ -99,64 +86,44 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:minWidth="44dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
                 android:text="播放"
-                android:textSize="11sp"
                 style="@style/SurveillanceAccentButton" />
 
             <Button
                 android:id="@+id/btn_play_all"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1.2"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:minWidth="56dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
                 android:text="全部播放"
-                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_live_snapshot"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.9"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:minWidth="40dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
                 android:text="抓图"
-                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_live_record"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.9"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:minWidth="40dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
                 android:text="录像"
-                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_toggle_ptz"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.9"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:minWidth="40dp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"
                 android:text="云台"
-                android:textSize="11sp"
-                style="@style/SurveillanceAccentButton" />
+                style="@style/SurveillanceButton" />
         </LinearLayout>
     </LinearLayout>
 
