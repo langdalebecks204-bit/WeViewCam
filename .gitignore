@@ -27,8 +27,8 @@ captures/
 WeViewCam_android/HCNetSDK*.zip
 WeViewCam_android/HCNetSDKV6.1.11.5*
 
-# Allow release APK
-!WeViewCam_android/weviewcam_android_v0.1.0.apk
+# Allow release and debug APK in WeViewCam_android
+!WeViewCam_android/*.apk
 
 # ==========================================
 # Ubuntu / Python Temporary Files

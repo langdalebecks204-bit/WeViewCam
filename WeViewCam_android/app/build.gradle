@@ -58,3 +58,32 @@ dependencies {
     implementation 'androidx.cardview:cardview:1.0.0'
     implementation 'com.google.code.gson:gson:2.10.1'
 }
+
+// 自动将构建生成的 APK 复制到项目根目录 (WeViewCam_android/)
+tasks.register('copyApkToRoot') {
+    doLast {
+        def outputDir = file("${project.layout.buildDirectory.get().asFile}/outputs/apk")
+        if (outputDir.exists()) {
+            outputDir.eachFileRecurse { f ->
+                if (f.name.endsWith('.apk')) {
+                    copy {
+                        from f
+                        into rootProject.projectDir
+                        rename { "weviewcam_android_v${android.defaultConfig.versionName}.apk" }
+                    }
+                    copy {
+                        from f
+                        into rootProject.projectDir
+                        rename { f.name }
+                    }
+                    println ">>> [Auto-Copy] Copied ${f.name} to ${rootProject.projectDir}"
+                }
+            }
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("assemble") }.configureEach {
+    it.finalizedBy 'copyApkToRoot'
+}
+
