@@ -9,6 +9,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ExpandableListView;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.Spinner;
@@ -205,49 +206,79 @@ public class LiveViewFragment extends Fragment {
     private void updateChannelSelectButton(ChannelInfo info) {
         if (btnChannelSelect == null) return;
         if (info != null) {
+            DeviceInfo dev = (deviceManager != null) ? deviceManager.getDevice(info.getDeviceId()) : null;
+            String devName = (dev != null && dev.getName() != null && !dev.getName().trim().isEmpty()) ? dev.getName() : "";
+            String prefix = devName.isEmpty() ? "" : (devName + ":");
             String status = info.isOnline() ? " [在线] ▼" : " [离线] ▼";
-            btnChannelSelect.setText(info.getName() + status);
+            btnChannelSelect.setText(prefix + info.getName() + status);
         } else {
             btnChannelSelect.setText("选择通道 ▼");
         }
     }
 
     private void showChannelPickerDialog(SurveillanceSurfaceView targetViewport) {
-        if (allChannels.isEmpty()) {
+        List<DeviceInfo> devices = (deviceManager != null) ? deviceManager.getDevices() : new ArrayList<>();
+        if (devices.isEmpty() || allChannels.isEmpty()) {
             Toast.makeText(getContext(), "暂无可用通道，请先在设备管理中添加并测试连接设备", Toast.LENGTH_SHORT).show();
             return;
         }
 
         SurveillanceSurfaceView vp = (targetViewport != null) ? targetViewport : (activeViewport != null ? activeViewport : viewports[0]);
         int vpIndex = getViewportIndex(vp);
-        String vpTitle = (vpIndex >= 0) ? ("【视口 " + (vpIndex + 1) + "】") : "【单画面】";
+        String vpTitle = (vpIndex >= 0) ? ("视口 " + (vpIndex + 1)) : "单画面";
 
-        String[] channelLabels = new String[allChannels.size()];
-        int selectedPos = -1;
-        for (int i = 0; i < allChannels.size(); i++) {
-            ChannelInfo ch = allChannels.get(i);
-            String status = ch.isOnline() ? " [在线]" : " [离线]";
-            channelLabels[i] = ch.getName() + status;
-            if (vp.getChannelInfo() != null &&
-                vp.getChannelInfo().getChannelNo() == ch.getChannelNo() &&
-                vp.getChannelInfo().getDeviceId().equals(ch.getDeviceId())) {
-                selectedPos = i;
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_channel_picker, null);
+        TextView tvSubtitle = dialogView.findViewById(R.id.tv_dialog_target_viewport);
+        ExpandableListView elvTree = dialogView.findViewById(R.id.elv_channel_tree);
+        TextView tvEmpty = dialogView.findViewById(R.id.tv_empty_notice);
+        Button btnClose = dialogView.findViewById(R.id.btn_dialog_close);
+
+        tvSubtitle.setText("目标: " + vpTitle);
+
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        List<DeviceInfo> validDevices = new ArrayList<>();
+        for (DeviceInfo d : devices) {
+            if (d.getChannels() != null && !d.getChannels().isEmpty()) {
+                validDevices.add(d);
             }
         }
 
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("选择 " + vpTitle + " 播放通道")
-                .setSingleChoiceItems(channelLabels, selectedPos, (dialog, which) -> {
-                    dialog.dismiss();
-                    if (which >= 0 && which < allChannels.size()) {
-                        ChannelInfo chosen = allChannels.get(which);
+        if (validDevices.isEmpty()) {
+            elvTree.setVisibility(View.GONE);
+            tvEmpty.setVisibility(View.VISIBLE);
+        } else {
+            elvTree.setVisibility(View.VISIBLE);
+            tvEmpty.setVisibility(View.GONE);
+            ChannelInfo currentCh = vp.getChannelInfo();
+
+            NvrChannelExpandableAdapter adapter = new NvrChannelExpandableAdapter(
+                    requireContext(),
+                    validDevices,
+                    currentCh,
+                    (device, chosenChannel) -> {
+                        dialog.dismiss();
                         selectViewport(vp);
-                        startPlayOnViewport(vp, chosen);
-                        Toast.makeText(getContext(), "视口 " + (vpIndex + 1) + " 已切换到: " + chosen.getName(), Toast.LENGTH_SHORT).show();
+                        startPlayOnViewport(vp, chosenChannel);
+                        Toast.makeText(getContext(), vpTitle + " 已切换到: " + device.getName() + " - " + chosenChannel.getName(), Toast.LENGTH_SHORT).show();
                     }
-                })
-                .setNegativeButton("取消", null)
-                .show();
+            );
+            elvTree.setAdapter(adapter);
+
+            // Expand all NVR groups by default for convenience
+            for (int i = 0; i < validDevices.size(); i++) {
+                elvTree.expandGroup(i);
+            }
+        }
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
     }
 
     private void toggleMaximizeViewport(SurveillanceSurfaceView viewport) {

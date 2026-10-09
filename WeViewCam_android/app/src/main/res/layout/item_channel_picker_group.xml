@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@color/surveillance_card_alt"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp">
+
+    <!-- NVR Badge Tag -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="NVR"
+        android:textColor="@color/white"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:background="@drawable/bg_nvr_badge"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp" />
+
+    <!-- NVR Name & IP info -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_nvr_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="NVR 设备"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/tv_nvr_ip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="192.168.1.64:8000"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Channel count info badge -->
+    <TextView
+        android:id="@+id/tv_nvr_channel_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="8 通道"
+        android:textColor="@color/primary_light"
+        android:textSize="11sp"
+        android:layout_marginEnd="8dp" />
+
+    <!-- Expand/collapse arrow indicator -->
+    <TextView
+        android:id="@+id/tv_expand_arrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="▼"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+</LinearLayout>

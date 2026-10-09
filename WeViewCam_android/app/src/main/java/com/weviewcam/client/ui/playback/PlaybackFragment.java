@@ -134,14 +134,16 @@ public class PlaybackFragment extends Fragment {
 
     private void loadChannels() {
         allChannels.clear();
-        for (DeviceInfo dev : deviceManager.getDevices()) {
-            allChannels.addAll(dev.getChannels());
-        }
-
         List<String> labels = new ArrayList<>();
-        for (ChannelInfo ch : allChannels) {
-            String status = ch.isOnline() ? " [在线]" : " [离线]";
-            labels.add(ch.getName() + status);
+        for (DeviceInfo dev : deviceManager.getDevices()) {
+            String devName = (dev.getName() != null && !dev.getName().trim().isEmpty()) ? dev.getName() : "NVR";
+            if (dev.getChannels() != null) {
+                for (ChannelInfo ch : dev.getChannels()) {
+                    allChannels.add(ch);
+                    String status = ch.isOnline() ? " [在线]" : " [离线]";
+                    labels.add(devName + " - " + ch.getName() + status);
+                }
+            }
         }
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, labels);

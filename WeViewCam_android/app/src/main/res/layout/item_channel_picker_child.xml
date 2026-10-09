@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="44dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@color/surveillance_card"
+    android:paddingStart="28dp"
+    android:paddingEnd="12dp">
+
+    <!-- Status indicator dot -->
+    <View
+        android:id="@+id/view_status_dot"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:background="@drawable/bg_status_dot_green" />
+
+    <!-- Channel Name -->
+    <TextView
+        android:id="@+id/tv_channel_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="10dp"
+        android:text="CH1 通道"
+        android:textColor="@color/text_primary"
+        android:textSize="13sp"
+        android:ellipsize="end"
+        android:maxLines="1" />
+
+    <!-- Online/Offline text badge -->
+    <TextView
+        android:id="@+id/tv_channel_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="在线"
+        android:textColor="@color/status_green"
+        android:textSize="11sp"
+        android:layout_marginEnd="8dp" />
+
+    <!-- Current active viewport badge if selected -->
+    <TextView
+        android:id="@+id/tv_channel_current_tag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="已选 ✓"
+        android:textColor="@color/primary_light"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+</LinearLayout>

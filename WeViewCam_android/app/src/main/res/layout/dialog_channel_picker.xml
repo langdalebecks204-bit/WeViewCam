@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog_rounded"
+    android:padding="16dp">
+
+    <!-- Header: Title and Target Viewport -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_dialog_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="选择监控通道"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_dialog_target_viewport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="目标: 视口 1"
+            android:textColor="@color/primary_light"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="8dp"
+        android:background="@color/surveillance_border" />
+
+    <!-- Expandable List of NVRs and their Channels -->
+    <ExpandableListView
+        android:id="@+id/elv_channel_tree"
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:divider="@color/surveillance_border"
+        android:dividerHeight="1dp"
+        android:childDivider="@color/surveillance_border"
+        android:groupIndicator="@null"
+        android:transcriptMode="disabled" />
+
+    <!-- Empty state notice when no devices/channels -->
+    <TextView
+        android:id="@+id/tv_empty_notice"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:gravity="center"
+        android:text="暂无可用设备或通道\n请在设备管理中添加并连接NVR"
+        android:textColor="@color/text_secondary"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="12dp"
+        android:background="@color/surveillance_border" />
+
+    <!-- Footer button -->
+    <Button
+        android:id="@+id/btn_dialog_close"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:text="关闭"
+        style="@style/SurveillanceButton" />
+
+</LinearLayout>
