@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1f6feb</color>
+    <color name="primary_dark">#0d1117</color>
+    <color name="primary_light">#58a6ff</color>
+    <color name="accent">#58a6ff</color>
+
+    <!-- Dark Surveillance Theme Colors -->
+    <color name="surveillance_bg">#0d1117</color>
+    <color name="surveillance_card">#161b22</color>
+    <color name="surveillance_card_alt">#21262d</color>
+    <color name="surveillance_border">#30363d</color>
+    <color name="surveillance_border_highlight">#58a6ff</color>
+
+    <color name="text_primary">#f0f6fc</color>
+    <color name="text_secondary">#8b949e</color>
+    <color name="text_muted">#484f58</color>
+
+    <!-- Status & Video indicators -->
+    <color name="status_green">#2ea043</color>
+    <color name="status_red">#f85149</color>
+    <color name="status_orange">#d29922</color>
+    <color name="status_purple">#bc8cff</color>
+
+    <!-- Timeline Colors -->
+    <color name="timeline_bg">#161b22</color>
+    <color name="timeline_ruler">#21262d</color>
+    <color name="timeline_tick">#8b949e</color>
+    <color name="timeline_text">#c9d1d9</color>
+    <color name="timeline_record">#2ea043</color>
+    <color name="timeline_needle">#ff4d4f</color>
+
+    <color name="black">#000000</color>
+    <color name="white">#ffffff</color>
+    <color name="transparent">#00000000</color>
+</resources>

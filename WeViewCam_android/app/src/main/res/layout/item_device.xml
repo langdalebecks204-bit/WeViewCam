@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp"
+    app:cardBackgroundColor="@color/surveillance_card"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- Top Title Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_device_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="海康威视演示设备"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_device_protocol"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="HIKVISION"
+                android:textColor="@color/primary_light"
+                android:textSize="11sp"
+                android:background="@drawable/bg_control_button"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp" />
+
+            <TextView
+                android:id="@+id/tv_device_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="在线"
+                android:textColor="@color/white"
+                android:textSize="11sp"
+                android:background="@drawable/bg_badge_online" />
+        </LinearLayout>
+
+        <!-- IP & Port & Channels -->
+        <TextView
+            android:id="@+id/tv_device_endpoint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="IP: 192.168.1.64:8000 (用户: admin)"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tv_device_channels_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="已配置通道: 4 个视频通道"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
+        <!-- Buttons Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="10dp"
+            android:gravity="end">
+
+            <Button
+                android:id="@+id/btn_device_test"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="测试连接"
+                android:textSize="11sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_device_edit"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:text="编辑"
+                android:textSize="11sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_device_delete"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:text="删除"
+                android:textSize="11sp"
+                style="@style/SurveillanceButton" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

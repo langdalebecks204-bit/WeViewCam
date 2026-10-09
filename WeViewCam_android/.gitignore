@@ -1,0 +1,16 @@
+# Android Studio / Gradle
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+.cxx/
+*.iml
+
+# Large SDK Archives & Unpacked Vendor Demos
+HCNetSDK*.zip
+HCNetSDKV6.1.11.5*
+
+# OS / Editor
+.DS_Store
+Thumbs.db

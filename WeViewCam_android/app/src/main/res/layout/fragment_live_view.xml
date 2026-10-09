@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/surveillance_bg">
+
+    <!-- Top Surveillance Toolbar -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:background="@color/surveillance_card">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:gravity="center_vertical">
+
+            <Spinner
+                android:id="@+id/spinner_camera_select"
+                android:layout_width="160dp"
+                android:layout_height="36dp"
+                android:background="@drawable/bg_control_button"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp" />
+
+            <Button
+                android:id="@+id/btn_live_play"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="6dp"
+                android:minWidth="56dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="播放"
+                android:textSize="12sp"
+                style="@style/SurveillanceAccentButton" />
+
+            <Button
+                android:id="@+id/btn_toggle_split"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="56dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="四分屏"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_stream_quality"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="56dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="主码流"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_live_snapshot"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="52dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="抓图"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_live_record"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="52dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="录像"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_toggle_ptz"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="52dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="云台"
+                android:textSize="12sp"
+                style="@style/SurveillanceAccentButton" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- Video Grid Container -->
+    <FrameLayout
+        android:id="@+id/video_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/black">
+
+        <!-- 2x2 Grid (Default) -->
+        <LinearLayout
+            android:id="@+id/grid_layout_4"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal">
+
+                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                    android:id="@+id/viewport_0"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_margin="1dp" />
+
+                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                    android:id="@+id/viewport_1"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_margin="1dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:orientation="horizontal">
+
+                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                    android:id="@+id/viewport_2"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_margin="1dp" />
+
+                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                    android:id="@+id/viewport_3"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_margin="1dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 1x1 Single View (Hidden by default, shown when 1-split or double-tapped) -->
+        <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+            android:id="@+id/viewport_single"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    <!-- Expandable PTZ Control Panel -->
+    <LinearLayout
+        android:id="@+id/layout_ptz_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="@color/surveillance_card"
+        android:visibility="visible">
+
+        <!-- D-Pad rocker -->
+        <com.weviewcam.client.ui.view.PTZControllerView
+            android:id="@+id/ptz_controller"
+            android:layout_width="140dp"
+            android:layout_height="140dp" />
+
+        <!-- Lens and Speed Controls -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp"
+            android:gravity="center_vertical">
+
+            <!-- Zoom & Focus & Iris row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btn_zoom_in"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:text="变倍 +"
+                    android:textSize="11sp"
+                    style="@style/SurveillanceButton" />
+
+                <Button
+                    android:id="@+id/btn_zoom_out"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="变倍 -"
+                    android:textSize="11sp"
+                    style="@style/SurveillanceButton" />
+
+                <Button
+                    android:id="@+id/btn_focus_near"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="聚焦 +"
+                    android:textSize="11sp"
+                    style="@style/SurveillanceButton" />
+
+                <Button
+                    android:id="@+id/btn_focus_far"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="聚焦 -"
+                    android:textSize="11sp"
+                    style="@style/SurveillanceButton" />
+            </LinearLayout>
+
+            <!-- Iris row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp">
+
+                <Button
+                    android:id="@+id/btn_iris_open"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:text="光圈 +"
+                    android:textSize="11sp"
+                    style="@style/SurveillanceButton" />
+
+                <Button
+                    android:id="@+id/btn_iris_close"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="光圈 -"
+                    android:textSize="11sp"
+                    style="@style/SurveillanceButton" />
+
+                <TextView
+                    android:id="@+id/tv_speed_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:text="速度: 4" />
+
+                <SeekBar
+                    android:id="@+id/seekbar_ptz_speed"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:max="7"
+                    android:progress="4" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

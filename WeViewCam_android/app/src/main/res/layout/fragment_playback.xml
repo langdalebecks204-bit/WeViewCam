@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/surveillance_bg">
+
+    <!-- Top Retrieval Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:gravity="center_vertical"
+        android:background="@color/surveillance_card">
+
+        <Spinner
+            android:id="@+id/spinner_playback_channel"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1.2"
+            android:background="@drawable/bg_control_button"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <Button
+            android:id="@+id/btn_select_date"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:text="2026-10-09"
+            android:textSize="12sp"
+            style="@style/SurveillanceButton" />
+
+        <Button
+            android:id="@+id/btn_search_records"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:text="检索录像"
+            android:textSize="12sp"
+            style="@style/SurveillanceAccentButton" />
+    </LinearLayout>
+
+    <!-- Playback Video Viewport -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/black">
+
+        <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+            android:id="@+id/viewport_playback"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+
+    <!-- Timeline Controls Container -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="@color/surveillance_card">
+
+        <!-- Zoom level buttons & Current Needle Time display -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <TextView
+                android:id="@+id/tv_playback_time"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="当前定位: 2026-10-09 00:00:00"
+                android:textColor="@color/primary_light"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btn_zoom_24h"
+                android:layout_width="48dp"
+                android:layout_height="28dp"
+                android:text="24h"
+                android:textSize="10sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_zoom_12h"
+                android:layout_width="48dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:text="12h"
+                android:textSize="10sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_zoom_4h"
+                android:layout_width="48dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:text="4h"
+                android:textSize="10sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_zoom_1h"
+                android:layout_width="48dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:text="1h"
+                android:textSize="10sp"
+                style="@style/SurveillanceButton" />
+        </LinearLayout>
+
+        <!-- 24-Hour Interactive Timeline Bar -->
+        <com.weviewcam.client.ui.view.TimelineBarView
+            android:id="@+id/timeline_bar"
+            android:layout_width="match_parent"
+            android:layout_height="65dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="6dp" />
+
+        <!-- Playback Operation Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btn_playback_play"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="播放"
+                android:textSize="12sp"
+                style="@style/SurveillanceAccentButton" />
+
+            <Button
+                android:id="@+id/btn_playback_stop"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="停止"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_playback_slow"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="慢放"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_playback_fast"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="快进"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_playback_step"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="单帧"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_playback_snapshot"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="抓图"
+                android:textSize="12sp"
+                style="@style/SurveillanceButton" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

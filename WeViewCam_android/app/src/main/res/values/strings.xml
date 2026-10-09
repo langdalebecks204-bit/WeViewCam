@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">WeViewCam</string>
+    <string name="nav_live">实时预览</string>
+    <string name="nav_playback">录像回放</string>
+    <string name="nav_device">设备管理</string>
+
+    <string name="live_preview">实时视频预览</string>
+    <string name="split_1">单画面</string>
+    <string name="split_4">四分屏</string>
+    <string name="snapshot">抓图</string>
+    <string name="record">录像</string>
+    <string name="stream_main">主码流</string>
+    <string name="stream_sub">子码流</string>
+    <string name="fullscreen">全屏</string>
+    <string name="ptz_control">云台控制 (PTZ)</string>
+
+    <string name="playback_title">录像检索与回放</string>
+    <string name="search_records">检索录像</string>
+    <string name="select_device">选择设备</string>
+    <string name="select_channel">选择通道</string>
+    <string name="select_date">选择日期</string>
+    <string name="btn_play">播放</string>
+    <string name="btn_pause">暂停</string>
+    <string name="btn_stop">停止</string>
+    <string name="btn_fast">快进</string>
+    <string name="btn_slow">慢放</string>
+    <string name="btn_step">单帧</string>
+
+    <string name="device_management">监控设备管理</string>
+    <string name="add_device">添加监控设备</string>
+    <string name="edit_device">编辑设备</string>
+    <string name="delete_device">删除设备</string>
+    <string name="test_connection">测试连接</string>
+    <string name="device_name">设备名称</string>
+    <string name="device_ip">IP 地址</string>
+    <string name="device_port">SDK 端口 (默认 8000)</string>
+    <string name="device_username">登录用户名</string>
+    <string name="device_password">登录密码</string>
+    <string name="device_protocol">通信协议</string>
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
+</resources>

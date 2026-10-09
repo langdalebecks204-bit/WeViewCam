@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_live"
+        android:icon="@android:drawable/ic_menu_camera"
+        android:title="@string/nav_live" />
+
+    <item
+        android:id="@+id/nav_playback"
+        android:icon="@android:drawable/ic_menu_recent_history"
+        android:title="@string/nav_playback" />
+
+    <item
+        android:id="@+id/nav_device"
+        android:icon="@android:drawable/ic_menu_manage"
+        android:title="@string/nav_device" />
+</menu>
