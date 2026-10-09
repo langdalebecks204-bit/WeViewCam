@@ -6,42 +6,50 @@
     android:orientation="vertical"
     android:background="@color/surveillance_bg">
 
-    <!-- Top Surveillance Toolbar -->
-    <HorizontalScrollView
+    <!-- Top Surveillance Toolbar Container (Two compact rows, no horizontal scrolling needed) -->
+    <LinearLayout
+        android:id="@+id/layout_toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:scrollbars="none"
-        android:background="@color/surveillance_card">
+        android:orientation="vertical"
+        android:background="@color/surveillance_card"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
+        <!-- Row 1: Channel & Split Mode Configuration (Always 100% visible, no scrolling) -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:id="@+id/layout_toolbar_row1"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
             android:orientation="horizontal"
-            android:padding="8dp"
             android:gravity="center_vertical">
 
             <Button
                 android:id="@+id/btn_active_viewport"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:minWidth="62dp"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
+                android:layout_height="match_parent"
+                android:minWidth="56dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
                 android:text="视口 1"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 style="@style/SurveillanceAccentButton" />
 
             <Button
                 android:id="@+id/btn_channel_select"
-                android:layout_width="160dp"
-                android:layout_height="36dp"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
                 android:background="@drawable/bg_control_button"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
                 android:text="选择通道 ▼"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:gravity="center_vertical|start"
                 android:ellipsize="end"
                 android:maxLines="1" />
@@ -54,98 +62,119 @@
                 android:visibility="gone" />
 
             <Button
-                android:id="@+id/btn_live_play"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginStart="6dp"
-                android:minWidth="56dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:text="播放"
-                android:textSize="12sp"
-                style="@style/SurveillanceAccentButton" />
-
-            <Button
-                android:id="@+id/btn_play_all"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginStart="4dp"
-                android:minWidth="68dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:text="全部播放"
-                android:textSize="12sp"
-                style="@style/SurveillanceButton" />
-
-            <Button
                 android:id="@+id/btn_toggle_split"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:layout_marginStart="4dp"
+                android:layout_height="match_parent"
                 android:minWidth="56dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
                 android:text="四分屏"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_stream_quality"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="4dp"
+                android:minWidth="52dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:text="子码流"
+                android:textSize="11sp"
+                style="@style/SurveillanceButton" />
+        </LinearLayout>
+
+        <!-- Row 2: Live Controls & Action Buttons (Evenly spaced, always 100% visible, no scrolling) -->
+        <LinearLayout
+            android:id="@+id/layout_toolbar_row2"
+            android:layout_width="match_parent"
+            android:layout_height="32dp"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btn_live_play"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:minWidth="44dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="播放"
+                android:textSize="11sp"
+                style="@style/SurveillanceAccentButton" />
+
+            <Button
+                android:id="@+id/btn_play_all"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.2"
                 android:layout_marginStart="4dp"
                 android:minWidth="56dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:text="主码流"
-                android:textSize="12sp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:text="全部播放"
+                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_live_snapshot"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.9"
                 android:layout_marginStart="4dp"
-                android:minWidth="52dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
+                android:minWidth="40dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
                 android:text="抓图"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_live_record"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.9"
                 android:layout_marginStart="4dp"
-                android:minWidth="52dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
+                android:minWidth="40dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
                 android:text="录像"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_toggle_ptz"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.9"
                 android:layout_marginStart="4dp"
-                android:minWidth="52dp"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
+                android:minWidth="40dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
                 android:text="云台"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 style="@style/SurveillanceAccentButton" />
         </LinearLayout>
-    </HorizontalScrollView>
+    </LinearLayout>
 
-    <!-- Video Grid Container -->
-    <FrameLayout
-        android:id="@+id/video_container"
+    <!-- Video & Controls Body Container (Portrait: vertical, Landscape: horizontal) -->
+    <LinearLayout
+        android:id="@+id/layout_live_body"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="@color/black">
+        android:orientation="vertical">
+
+        <!-- Video Grid Container -->
+        <FrameLayout
+            android:id="@+id/video_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@color/black">
 
         <!-- 2x2 Grid (Default) -->
         <LinearLayout
@@ -214,7 +243,7 @@
         android:orientation="horizontal"
         android:padding="8dp"
         android:background="@color/surveillance_card"
-        android:visibility="visible">
+        android:visibility="gone">
 
         <!-- D-Pad rocker -->
         <com.weviewcam.client.ui.view.PTZControllerView
@@ -321,6 +350,8 @@
             </LinearLayout>
 
         </LinearLayout>
+    </LinearLayout>
+
     </LinearLayout>
 
 </LinearLayout>

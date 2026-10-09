@@ -17,16 +17,30 @@ import com.weviewcam.client.ui.device.DeviceManagementFragment;
 import com.weviewcam.client.ui.live.LiveViewFragment;
 import com.weviewcam.client.ui.playback.PlaybackFragment;
 
+import android.content.res.Configuration;
+import android.view.View;
+import androidx.annotation.NonNull;
+
 public class MainActivity extends AppCompatActivity {
 
     private LiveViewFragment liveViewFragment;
     private PlaybackFragment playbackFragment;
     private DeviceManagementFragment deviceManagementFragment;
 
+    private View appHeader;
+    private View headerDivider;
+    private View bottomDivider;
+    private BottomNavigationView bottomNav;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        appHeader = findViewById(R.id.app_header);
+        headerDivider = findViewById(R.id.header_divider);
+        bottomDivider = findViewById(R.id.bottom_divider);
+        bottomNav = findViewById(R.id.bottom_navigation);
 
         // Pre-initialize DeviceManager
         DeviceManager.getInstance(this);
@@ -40,7 +54,8 @@ public class MainActivity extends AppCompatActivity {
         // Default to Live View
         switchFragment(liveViewFragment);
 
-        BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);
+        updateOrientationVisibility(getResources().getConfiguration().orientation);
+
         bottomNav.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             if (id == R.id.nav_live) {
@@ -55,6 +70,21 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         });
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        updateOrientationVisibility(newConfig.orientation);
+    }
+
+    private void updateOrientationVisibility(int orientation) {
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        int visibility = isLandscape ? View.GONE : View.VISIBLE;
+        if (appHeader != null) appHeader.setVisibility(visibility);
+        if (headerDivider != null) headerDivider.setVisibility(visibility);
+        if (bottomDivider != null) bottomDivider.setVisibility(visibility);
+        if (bottomNav != null) bottomNav.setVisibility(visibility);
     }
 
     private void switchFragment(Fragment fragment) {

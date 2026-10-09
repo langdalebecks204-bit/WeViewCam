@@ -1,15 +1,15 @@
 package com.weviewcam.client.ui.live;
 
 import android.annotation.SuppressLint;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -43,6 +43,8 @@ import java.util.Map;
 public class LiveViewFragment extends Fragment {
     private static final String MODULE = "LiveView";
 
+    private LinearLayout layoutLiveBody;
+    private View videoContainer;
     private View gridLayout4;
     private SurveillanceSurfaceView viewportSingle;
     private final SurveillanceSurfaceView[] viewports = new SurveillanceSurfaceView[4];
@@ -97,6 +99,8 @@ public class LiveViewFragment extends Fragment {
     }
 
     private void initViews(View root) {
+        layoutLiveBody = root.findViewById(R.id.layout_live_body);
+        videoContainer = root.findViewById(R.id.video_container);
         gridLayout4 = root.findViewById(R.id.grid_layout_4);
         viewportSingle = root.findViewById(R.id.viewport_single);
         viewports[0] = root.findViewById(R.id.viewport_0);
@@ -118,6 +122,8 @@ public class LiveViewFragment extends Fragment {
         ptzController = root.findViewById(R.id.ptz_controller);
         seekbarPtzSpeed = root.findViewById(R.id.seekbar_ptz_speed);
         tvSpeedLabel = root.findViewById(R.id.tv_speed_label);
+
+        updateOrientationLayout(getResources().getConfiguration().orientation);
     }
 
     private void setupViewports() {
@@ -310,6 +316,10 @@ public class LiveViewFragment extends Fragment {
         btnTogglePtz.setOnClickListener(v -> {
             boolean visible = layoutPtzPanel.getVisibility() == View.VISIBLE;
             layoutPtzPanel.setVisibility(visible ? View.GONE : View.VISIBLE);
+            btnTogglePtz.setBackgroundTintList(ContextCompat.getColorStateList(
+                    requireContext(),
+                    visible ? R.color.surveillance_card_alt : R.color.primary
+            ));
         });
 
         seekbarPtzSpeed.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -580,6 +590,38 @@ public class LiveViewFragment extends Fragment {
             return adapter;
         }
         return null;
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        updateOrientationLayout(newConfig.orientation);
+    }
+
+    private void updateOrientationLayout(int orientation) {
+        if (layoutLiveBody == null || videoContainer == null) return;
+        boolean isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
+        if (isLandscape) {
+            layoutLiveBody.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams videoParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+            videoContainer.setLayoutParams(videoParams);
+            if (layoutPtzPanel != null) {
+                LinearLayout.LayoutParams ptzParams = new LinearLayout.LayoutParams(dpToPx(320), ViewGroup.LayoutParams.MATCH_PARENT, 0.0f);
+                layoutPtzPanel.setLayoutParams(ptzParams);
+            }
+        } else {
+            layoutLiveBody.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams videoParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f);
+            videoContainer.setLayoutParams(videoParams);
+            if (layoutPtzPanel != null) {
+                LinearLayout.LayoutParams ptzParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0.0f);
+                layoutPtzPanel.setLayoutParams(ptzParams);
+            }
+        }
+    }
+
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     @Override
