@@ -7,6 +7,7 @@
 
     <!-- Top Retrieval Bar -->
     <LinearLayout
+        android:id="@+id/layout_playback_toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -52,6 +53,17 @@
             android:text="16:9"
             android:textSize="12sp"
             style="@style/SurveillanceButton" />
+
+        <Button
+            android:id="@+id/btn_playback_fullscreen"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="全屏"
+            android:textSize="12sp"
+            style="@style/SurveillanceAccentButton" />
     </LinearLayout>
 
     <!-- Playback Video Viewport -->
@@ -65,6 +77,33 @@
             android:id="@+id/viewport_playback"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <!-- Floating Fullscreen Exit Button (Top-Left, visible in fullscreen) -->
+        <Button
+            android:id="@+id/btn_playback_fullscreen_exit"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_margin="12dp"
+            android:layout_gravity="top|start"
+            android:text="← 退出全屏"
+            android:textSize="12sp"
+            android:visibility="gone"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            style="@style/SurveillanceButton" />
+
+        <!-- Floating Fullscreen Toggle Button (Bottom-Right) -->
+        <Button
+            android:id="@+id/btn_playback_fullscreen_floating"
+            android:layout_width="wrap_content"
+            android:layout_height="30dp"
+            android:layout_margin="8dp"
+            android:layout_gravity="bottom|end"
+            android:text="⛶ 全屏"
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            style="@style/SurveillanceButton" />
     </FrameLayout>
 
     <!-- Timeline Controls Container -->

@@ -75,10 +75,19 @@
                 android:id="@+id/btn_aspect_ratio"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.9"
+                android:layout_weight="0.8"
                 android:layout_marginStart="4dp"
                 android:text="16:9"
                 style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_fullscreen"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.85"
+                android:layout_marginStart="4dp"
+                android:text="全屏"
+                style="@style/SurveillanceAccentButton" />
         </LinearLayout>
 
         <!-- Row 2: Live Controls & Action Buttons (Identical 34dp height and equal 1:1:1:1:1 distribution) -->
@@ -208,6 +217,33 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:visibility="gone" />
+
+        <!-- Floating Fullscreen Exit Button (Top-Left, visible in fullscreen) -->
+        <Button
+            android:id="@+id/btn_fullscreen_exit"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_margin="12dp"
+            android:layout_gravity="top|start"
+            android:text="← 退出全屏"
+            android:textSize="12sp"
+            android:visibility="gone"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            style="@style/SurveillanceButton" />
+
+        <!-- Floating Fullscreen Toggle Button (Bottom-Right) -->
+        <Button
+            android:id="@+id/btn_fullscreen_floating"
+            android:layout_width="wrap_content"
+            android:layout_height="30dp"
+            android:layout_margin="8dp"
+            android:layout_gravity="bottom|end"
+            android:text="⛶ 全屏"
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            style="@style/SurveillanceButton" />
 
     </FrameLayout>
 

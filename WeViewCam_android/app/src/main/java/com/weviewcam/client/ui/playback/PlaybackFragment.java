@@ -26,6 +26,7 @@ import com.weviewcam.client.core.model.ChannelInfo;
 import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PlaybackCommand;
 import com.weviewcam.client.core.model.RecordSegment;
+import com.weviewcam.client.ui.MainActivity;
 import com.weviewcam.client.ui.view.SurveillanceSurfaceView;
 import com.weviewcam.client.ui.view.TimelineBarView;
 
@@ -37,9 +38,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-public class PlaybackFragment extends Fragment {
+public class PlaybackFragment extends Fragment implements MainActivity.FullScreenListener {
     private static final String MODULE = "Playback";
 
+    private View layoutPlaybackToolbar;
     private Spinner spinnerChannel;
     private Button btnSelectDate;
     private Button btnSearchRecords;
@@ -47,6 +49,9 @@ public class PlaybackFragment extends Fragment {
     private TextView tvPlaybackTime;
     private TimelineBarView timelineBar;
     private Button btnAspectRatio;
+    private Button btnFullscreen;
+    private Button btnFullscreenExit;
+    private Button btnFullscreenFloating;
     private SurveillanceSurfaceView.AspectRatioMode currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
 
     private Button btnPlay;
@@ -96,6 +101,7 @@ public class PlaybackFragment extends Fragment {
         tvPlaybackTime = root.findViewById(R.id.tv_playback_time);
         timelineBar = root.findViewById(R.id.timeline_bar);
 
+        layoutPlaybackToolbar = root.findViewById(R.id.layout_playback_toolbar);
         btnPlay = root.findViewById(R.id.btn_playback_play);
         btnStop = root.findViewById(R.id.btn_playback_stop);
         btnSlow = root.findViewById(R.id.btn_playback_slow);
@@ -103,6 +109,9 @@ public class PlaybackFragment extends Fragment {
         btnStep = root.findViewById(R.id.btn_playback_step);
         btnSnapshot = root.findViewById(R.id.btn_playback_snapshot);
         btnAspectRatio = root.findViewById(R.id.btn_playback_aspect_ratio);
+        btnFullscreen = root.findViewById(R.id.btn_playback_fullscreen);
+        btnFullscreenExit = root.findViewById(R.id.btn_playback_fullscreen_exit);
+        btnFullscreenFloating = root.findViewById(R.id.btn_playback_fullscreen_floating);
         if (btnAspectRatio != null) {
             btnAspectRatio.setText(currentAspectRatio.getLabel());
         }
@@ -118,6 +127,15 @@ public class PlaybackFragment extends Fragment {
         btnSearchRecords.setOnClickListener(v -> searchRecords());
         if (btnAspectRatio != null) {
             btnAspectRatio.setOnClickListener(v -> cycleAspectRatio());
+        }
+        if (btnFullscreen != null) {
+            btnFullscreen.setOnClickListener(v -> toggleFullScreen());
+        }
+        if (btnFullscreenExit != null) {
+            btnFullscreenExit.setOnClickListener(v -> toggleFullScreen());
+        }
+        if (btnFullscreenFloating != null) {
+            btnFullscreenFloating.setOnClickListener(v -> toggleFullScreen());
         }
 
         // Zoom buttons
@@ -355,11 +373,31 @@ public class PlaybackFragment extends Fragment {
         Toast.makeText(getContext(), "回放抓图已保存", Toast.LENGTH_SHORT).show();
     }
 
+    private void toggleFullScreen() {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).toggleFullScreen();
+        }
+    }
+
+    @Override
+    public void onFullScreenChanged(boolean isFullScreen) {
+        if (layoutPlaybackToolbar != null) {
+            layoutPlaybackToolbar.setVisibility(isFullScreen ? View.GONE : View.VISIBLE);
+        }
+        if (btnFullscreenExit != null) {
+            btnFullscreenExit.setVisibility(isFullScreen ? View.VISIBLE : View.GONE);
+        }
+        if (btnFullscreenFloating != null) {
+            btnFullscreenFloating.setText(isFullScreen ? "退出全屏" : "⛶ 全屏");
+        }
+        if (btnFullscreen != null) {
+            btnFullscreen.setText(isFullScreen ? "退出全屏" : "全屏");
+        }
+    }
+
     private void cycleAspectRatio() {
         if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9) {
             currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3;
-        } else if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3) {
-            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_FILL;
         } else {
             currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
         }

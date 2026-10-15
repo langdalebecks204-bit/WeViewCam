@@ -29,6 +29,7 @@ import com.weviewcam.client.core.manager.DeviceManager;
 import com.weviewcam.client.core.model.ChannelInfo;
 import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PTZCommand;
+import com.weviewcam.client.ui.MainActivity;
 import com.weviewcam.client.ui.view.PTZControllerView;
 import com.weviewcam.client.ui.view.SurveillanceSurfaceView;
 
@@ -41,7 +42,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-public class LiveViewFragment extends Fragment {
+public class LiveViewFragment extends Fragment implements MainActivity.FullScreenListener {
     private static final String MODULE = "LiveView";
 
     private LinearLayout layoutToolbar;
@@ -61,6 +62,9 @@ public class LiveViewFragment extends Fragment {
     private Button btnToggleSplit;
     private Button btnStreamQuality;
     private Button btnAspectRatio;
+    private Button btnFullscreen;
+    private Button btnFullscreenExit;
+    private Button btnFullscreenFloating;
     private SurveillanceSurfaceView.AspectRatioMode currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
     private Button btnLiveSnapshot;
     private Button btnLiveRecord;
@@ -125,6 +129,9 @@ public class LiveViewFragment extends Fragment {
         btnStreamQuality = root.findViewById(R.id.btn_stream_quality);
         btnStreamQuality.setText(currentStreamType == 0 ? "主码流" : "子码流");
         btnAspectRatio = root.findViewById(R.id.btn_aspect_ratio);
+        btnFullscreen = root.findViewById(R.id.btn_fullscreen);
+        btnFullscreenExit = root.findViewById(R.id.btn_fullscreen_exit);
+        btnFullscreenFloating = root.findViewById(R.id.btn_fullscreen_floating);
         if (btnAspectRatio != null) {
             btnAspectRatio.setText(currentAspectRatio.getLabel());
         }
@@ -368,6 +375,15 @@ public class LiveViewFragment extends Fragment {
 
         if (btnAspectRatio != null) {
             btnAspectRatio.setOnClickListener(v -> cycleAspectRatio());
+        }
+        if (btnFullscreen != null) {
+            btnFullscreen.setOnClickListener(v -> toggleFullScreen());
+        }
+        if (btnFullscreenExit != null) {
+            btnFullscreenExit.setOnClickListener(v -> toggleFullScreen());
+        }
+        if (btnFullscreenFloating != null) {
+            btnFullscreenFloating.setOnClickListener(v -> toggleFullScreen());
         }
 
         btnLiveSnapshot.setOnClickListener(v -> takeSnapshot());
@@ -661,6 +677,10 @@ public class LiveViewFragment extends Fragment {
 
     private void updateOrientationLayout(int orientation) {
         if (layoutLiveBody == null || videoContainer == null) return;
+        if (getActivity() instanceof MainActivity && ((MainActivity) getActivity()).isFullScreen()) {
+            onFullScreenChanged(true);
+            return;
+        }
         boolean isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
 
         if (layoutToolbar != null && layoutToolbarRow1 != null && layoutToolbarRow2 != null) {
@@ -702,11 +722,45 @@ public class LiveViewFragment extends Fragment {
         }
     }
 
+    private void toggleFullScreen() {
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).toggleFullScreen();
+        }
+    }
+
+    @Override
+    public void onFullScreenChanged(boolean isFullScreen) {
+        if (layoutToolbar != null) {
+            layoutToolbar.setVisibility(isFullScreen ? View.GONE : View.VISIBLE);
+        }
+        if (layoutPtzPanel != null) {
+            layoutPtzPanel.setVisibility(View.GONE);
+        }
+        if (btnFullscreenExit != null) {
+            btnFullscreenExit.setVisibility(isFullScreen ? View.VISIBLE : View.GONE);
+        }
+        if (btnFullscreenFloating != null) {
+            btnFullscreenFloating.setText(isFullScreen ? "退出全屏" : "⛶ 全屏");
+        }
+        if (btnFullscreen != null) {
+            btnFullscreen.setText(isFullScreen ? "退出全屏" : "全屏");
+        }
+
+        if (isFullScreen) {
+            layoutLiveBody.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams videoParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            );
+            videoContainer.setLayoutParams(videoParams);
+        } else {
+            updateOrientationLayout(Configuration.ORIENTATION_PORTRAIT);
+        }
+    }
+
     private void cycleAspectRatio() {
         if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9) {
             currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3;
-        } else if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3) {
-            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_FILL;
         } else {
             currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
         }

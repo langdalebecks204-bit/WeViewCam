@@ -25,8 +25,7 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
 
     public enum AspectRatioMode {
         RATIO_16_9("16:9", 16.0f / 9.0f),
-        RATIO_4_3("4:3", 4.0f / 3.0f),
-        RATIO_FILL("铺满", 0f);
+        RATIO_4_3("4:3", 4.0f / 3.0f);
 
         private final String label;
         private final float ratio;

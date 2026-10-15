@@ -72,15 +72,83 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private boolean isFullScreen = false;
+
+    public interface FullScreenListener {
+        void onFullScreenChanged(boolean isFullScreen);
+    }
+
+    public boolean isFullScreen() {
+        return isFullScreen;
+    }
+
+    public void setFullScreen(boolean fullScreen) {
+        this.isFullScreen = fullScreen;
+        if (fullScreen) {
+            setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            enterImmersiveMode();
+            updateOrientationVisibility(Configuration.ORIENTATION_LANDSCAPE);
+        } else {
+            setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            exitImmersiveMode();
+            updateOrientationVisibility(Configuration.ORIENTATION_PORTRAIT);
+        }
+
+        notifyFullScreenChanged(fullScreen);
+    }
+
+    public void toggleFullScreen() {
+        setFullScreen(!isFullScreen);
+    }
+
+    private void notifyFullScreenChanged(boolean fullScreen) {
+        Fragment current = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+        if (current instanceof FullScreenListener) {
+            ((FullScreenListener) current).onFullScreenChanged(fullScreen);
+        }
+    }
+
+    private void enterImmersiveMode() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
+    }
+
+    private void exitImmersiveMode() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (isFullScreen) {
+            setFullScreen(false);
+            return;
+        }
+        super.onBackPressed();
+    }
+
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        updateOrientationVisibility(newConfig.orientation);
+        if (isFullScreen) {
+            enterImmersiveMode();
+            updateOrientationVisibility(Configuration.ORIENTATION_LANDSCAPE);
+            notifyFullScreenChanged(true);
+        } else {
+            updateOrientationVisibility(newConfig.orientation);
+        }
     }
 
     private void updateOrientationVisibility(int orientation) {
         boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
-        int visibility = isLandscape ? View.GONE : View.VISIBLE;
+        int visibility = (isLandscape || isFullScreen) ? View.GONE : View.VISIBLE;
         if (appHeader != null) appHeader.setVisibility(visibility);
         if (headerDivider != null) headerDivider.setVisibility(visibility);
         if (bottomDivider != null) bottomDivider.setVisibility(visibility);
@@ -88,6 +156,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void switchFragment(Fragment fragment) {
+        if (isFullScreen) {
+            setFullScreen(false);
+        }
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, fragment)
                 .commit();
