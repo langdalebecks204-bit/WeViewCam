@@ -2,6 +2,8 @@ package com.weviewcam.client.ui.device;
 
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -10,8 +12,11 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.FileProvider;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -20,14 +25,51 @@ import com.weviewcam.client.R;
 import com.weviewcam.client.core.manager.DeviceManager;
 import com.weviewcam.client.core.model.DeviceInfo;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class DeviceManagementFragment extends Fragment {
     private RecyclerView recyclerView;
     private DeviceAdapter adapter;
     private DeviceManager deviceManager;
     private final List<DeviceInfo> deviceList = new ArrayList<>();
+
+    private ActivityResultLauncher<String> exportDocumentLauncher;
+    private ActivityResultLauncher<String[]> importDocumentLauncher;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        exportDocumentLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("application/json"),
+                uri -> {
+                    if (uri != null) {
+                        writeBackupToUri(uri);
+                    }
+                }
+        );
+
+        importDocumentLauncher = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri -> {
+                    if (uri != null) {
+                        readBackupFromUri(uri);
+                    }
+                }
+        );
+    }
 
     @Nullable
     @Override
@@ -48,7 +90,117 @@ public class DeviceManagementFragment extends Fragment {
         Button btnAdd = view.findViewById(R.id.btn_add_device);
         btnAdd.setOnClickListener(v -> showAddDeviceDialog());
 
+        Button btnBackup = view.findViewById(R.id.btn_backup_devices);
+        if (btnBackup != null) {
+            btnBackup.setOnClickListener(v -> showBackupOptionsDialog());
+        }
+
+        Button btnImport = view.findViewById(R.id.btn_import_devices);
+        if (btnImport != null) {
+            btnImport.setOnClickListener(v -> importDocumentLauncher.launch(new String[]{"application/json", "text/*", "*/*"}));
+        }
+
         loadDevices();
+    }
+
+    private void showBackupOptionsDialog() {
+        if (deviceList.isEmpty()) {
+            Toast.makeText(getContext(), "当前没有可导出的设备配置", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String[] options = new String[]{"保存为本地备份文件", "分享备份文件 (微信/QQ/局域网等)"};
+        new AlertDialog.Builder(requireContext())
+                .setTitle("导出设备配置备份")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+                        String fileName = "weviewcam_devices_" + timeStamp + ".json";
+                        exportDocumentLauncher.launch(fileName);
+                    } else if (which == 1) {
+                        shareBackupFile();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void writeBackupToUri(Uri uri) {
+        try (OutputStream os = requireContext().getContentResolver().openOutputStream(uri);
+             OutputStreamWriter writer = new OutputStreamWriter(os, StandardCharsets.UTF_8)) {
+            writer.write(deviceManager.exportDevicesJson());
+            Toast.makeText(getContext(), "设备配置备份已成功保存到文件", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "保存备份失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void shareBackupFile() {
+        try {
+            File cacheDir = new File(requireContext().getCacheDir(), "backups");
+            if (!cacheDir.exists() && !cacheDir.mkdirs()) {
+                throw new IllegalStateException("无法创建临时备份目录");
+            }
+            File backupFile = new File(cacheDir, "weviewcam_devices_backup.json");
+            try (FileOutputStream fos = new FileOutputStream(backupFile);
+                 OutputStreamWriter writer = new OutputStreamWriter(fos, StandardCharsets.UTF_8)) {
+                writer.write(deviceManager.exportDevicesJson());
+            }
+
+            Uri contentUri = FileProvider.getUriForFile(
+                    requireContext(),
+                    requireContext().getPackageName() + ".fileprovider",
+                    backupFile
+            );
+
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("application/json");
+            shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "WeViewCam 设备配置备份");
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(shareIntent, "分享设备配置备份"));
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "分享失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void readBackupFromUri(Uri uri) {
+        try (InputStream is = requireContext().getContentResolver().openInputStream(uri);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+
+            List<DeviceInfo> parsed = deviceManager.parseDevicesJson(sb.toString());
+            if (parsed == null || parsed.isEmpty()) {
+                Toast.makeText(getContext(), "备份文件中未识别到有效设备配置，请核对格式", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            showImportModeDialog(parsed);
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "读取备份文件失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showImportModeDialog(List<DeviceInfo> newDevices) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("导入设备配置")
+                .setMessage("成功识别到 " + newDevices.size() + " 台设备配置。\n请选择导入策略：\n\n" +
+                        "【增量合并】：若已存在相同设备则更新覆盖，新设备自动追加（推荐）。\n" +
+                        "【完全覆盖】：清空当前所有设备，完全替换为备份文件内容。")
+                .setPositiveButton("增量合并", (dialog, which) -> executeImport(newDevices, false))
+                .setNeutralButton("完全覆盖", (dialog, which) -> executeImport(newDevices, true))
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void executeImport(List<DeviceInfo> newDevices, boolean overwriteAll) {
+        int count = deviceManager.importDevices(newDevices, overwriteAll);
+        loadDevices();
+        Toast.makeText(getContext(), "成功导入并生效 " + count + " 台设备", Toast.LENGTH_LONG).show();
     }
 
     private void loadDevices() {

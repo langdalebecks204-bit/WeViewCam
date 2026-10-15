@@ -25,9 +25,33 @@
             android:textStyle="bold" />
 
         <Button
+            android:id="@+id/btn_import_devices"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="📥 导入"
+            android:textSize="12sp"
+            style="@style/SurveillanceButton" />
+
+        <Button
+            android:id="@+id/btn_backup_devices"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="📤 备份"
+            android:textSize="12sp"
+            style="@style/SurveillanceButton" />
+
+        <Button
             android:id="@+id/btn_add_device"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
             android:text="+ 添加设备"
             android:textSize="12sp"
             style="@style/SurveillanceAccentButton" />
