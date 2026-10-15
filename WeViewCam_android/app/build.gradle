@@ -22,6 +22,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -65,12 +66,14 @@ tasks.register('copyApkToRoot') {
     doLast {
         def outputDir = file("${project.layout.buildDirectory.get().asFile}/outputs/apk")
         if (outputDir.exists()) {
+            File releaseApk = null
+            File debugApk = null
             outputDir.eachFileRecurse { f ->
-                if (f.name.endsWith('.apk')) {
-                    copy {
-                        from f
-                        into rootProject.projectDir
-                        rename { "weviewcam_android_v${android.defaultConfig.versionName}.apk" }
+                if (f.name.endsWith('.apk') && !f.name.contains('unsigned')) {
+                    if (f.name.contains('release')) {
+                        releaseApk = f
+                    } else if (f.name.contains('debug')) {
+                        debugApk = f
                     }
                     copy {
                         from f
@@ -79,6 +82,15 @@ tasks.register('copyApkToRoot') {
                     }
                     println ">>> [Auto-Copy] Copied ${f.name} to ${rootProject.projectDir}"
                 }
+            }
+            File preferredApk = releaseApk ?: debugApk
+            if (preferredApk != null) {
+                copy {
+                    from preferredApk
+                    into rootProject.projectDir
+                    rename { "weviewcam_android_v${android.defaultConfig.versionName}.apk" }
+                }
+                println ">>> [Auto-Copy] Preferred signed APK copied as weviewcam_android_v${android.defaultConfig.versionName}.apk from ${preferredApk.name}"
             }
         }
     }
