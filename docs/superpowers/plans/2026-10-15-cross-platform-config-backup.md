@@ -29,7 +29,7 @@
   - `DeviceManager.import_devices(source_path: str, overwrite: bool = False) -> Tuple[bool, str, int]`
   - `DeviceManager._normalize_device_dict(raw: dict) -> dict`
 
-- [ ] **Step 1: Write the failing tests for Ubuntu backup and import**
+- [x] **Step 1: Write the failing tests for Ubuntu backup and import**
 
 Create `WeViewCam_ubuntu/tests/test_device_backup.py`:
 ```python
@@ -150,7 +150,7 @@ def test_import_camel_case_compatibility():
             os.remove(cfg_path)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 ```bash
@@ -158,7 +158,7 @@ python -m pytest WeViewCam_ubuntu/tests/test_device_backup.py -v
 ```
 Expected: FAIL with `AttributeError: 'DeviceManager' object has no attribute 'export_devices'`
 
-- [ ] **Step 3: Implement export and import with normalization in `DeviceManager`**
+- [x] **Step 3: Implement export and import with normalization in `DeviceManager`**
 
 Update `WeViewCam_ubuntu/core/device_manager.py`:
 Add helper method `_normalize_device_dict`, and add `export_devices` and `import_devices`:
@@ -316,7 +316,7 @@ Add helper method `_normalize_device_dict`, and add `export_devices` and `import
             return False, f"导入失败: {str(e)}", 0
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 ```bash
@@ -324,7 +324,7 @@ python -m pytest WeViewCam_ubuntu/tests/test_device_backup.py -v
 ```
 Expected: PASS (2 passed)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add WeViewCam_ubuntu/core/device_manager.py WeViewCam_ubuntu/tests/test_device_backup.py
@@ -342,7 +342,7 @@ git commit -m "feat(ubuntu): implement device configuration export, import and n
 - Consumes: `DeviceManager.export_devices`, `DeviceManager.import_devices`, `DeviceManager.list_devices`
 - Produces: UI buttons `btn_import`, `btn_export` in device tree widget header; signals and handler methods `on_export_clicked()`, `on_import_clicked()`.
 
-- [ ] **Step 1: Add unit/widget test for UI import/export actions**
+- [x] **Step 1: Add unit/widget test for UI import/export actions**
 
 Update `WeViewCam_ubuntu/tests/test_device_backup.py` with a widget test:
 ```python
@@ -365,7 +365,7 @@ def test_device_tree_widget_backup_buttons():
             os.remove(tmp_cfg)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 ```bash
@@ -373,7 +373,7 @@ python -m pytest WeViewCam_ubuntu/tests/test_device_backup.py -k test_device_tre
 ```
 Expected: FAIL with `AssertionError: assert hasattr(widget, 'btn_export')`
 
-- [ ] **Step 3: Implement export and import buttons & handlers in `DeviceTreeWidget`**
+- [x] **Step 3: Implement export and import buttons & handlers in `DeviceTreeWidget`**
 
 In `WeViewCam_ubuntu/ui/device_tree_widget.py`:
 1. In `_init_ui()` header layout:
@@ -456,7 +456,7 @@ In `WeViewCam_ubuntu/ui/device_tree_widget.py`:
             QMessageBox.warning(self, "导入失败", message)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 ```bash
@@ -464,7 +464,7 @@ python -m pytest WeViewCam_ubuntu/tests/test_device_backup.py -v
 ```
 Expected: PASS (3 passed)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add WeViewCam_ubuntu/ui/device_tree_widget.py WeViewCam_ubuntu/tests/test_device_backup.py
@@ -490,7 +490,7 @@ git commit -m "feat(ubuntu): add import and export backup actions to device tree
   - `DeviceManager.parseDevicesJson(String jsonString) -> List<DeviceInfo>`
   - `DeviceManager.importDevices(List<DeviceInfo> newDevices, boolean overwriteAll) -> int`
 
-- [ ] **Step 1: Add junit to `build.gradle` and write unit tests for serialization and interoperability**
+- [x] **Step 1: Add junit to `build.gradle` and write unit tests for serialization and interoperability**
 
 In `WeViewCam_android/app/build.gradle`, add:
 ```gradle
@@ -621,7 +621,7 @@ public class DeviceSerializationTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 ```bash
@@ -629,7 +629,7 @@ cd WeViewCam_android && ./gradlew testDebugUnitTest --tests com.weviewcam.client
 ```
 Expected: FAIL due to missing annotations (`device_id` null / `rtsp_port` 0).
 
-- [ ] **Step 3: Implement annotations and manager methods**
+- [x] **Step 3: Implement annotations and manager methods**
 
 1. Update `WeViewCam_android/app/src/main/java/com/weviewcam/client/core/model/DeviceInfo.java`:
 ```java
@@ -769,7 +769,7 @@ Add:
     }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 ```bash
@@ -777,7 +777,7 @@ cd WeViewCam_android && ./gradlew testDebugUnitTest --tests com.weviewcam.client
 ```
 Expected: PASS (3 passed)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add WeViewCam_android/
@@ -798,7 +798,7 @@ git commit -m "feat(android): add json annotations, export and import methods in
 - Consumes: `ActivityResultContracts.CreateDocument`, `ActivityResultContracts.OpenDocument`, `androidx.core.content.FileProvider`
 - Produces: UI buttons for Backup (`btn_backup_devices`) and Import (`btn_import_devices`), handling SAF storage and share sheet.
 
-- [ ] **Step 1: Create `res/xml/file_paths.xml` for FileProvider**
+- [x] **Step 1: Create `res/xml/file_paths.xml` for FileProvider**
 
 Create `WeViewCam_android/app/src/main/res/xml/file_paths.xml`:
 ```xml
@@ -808,7 +808,7 @@ Create `WeViewCam_android/app/src/main/res/xml/file_paths.xml`:
 </paths>
 ```
 
-- [ ] **Step 2: Register FileProvider in `AndroidManifest.xml`**
+- [x] **Step 2: Register FileProvider in `AndroidManifest.xml`**
 
 In `WeViewCam_android/app/src/main/AndroidManifest.xml`, inside `<application>`:
 ```xml
@@ -823,7 +823,7 @@ In `WeViewCam_android/app/src/main/AndroidManifest.xml`, inside `<application>`:
         </provider>
 ```
 
-- [ ] **Step 3: Update `fragment_device_management.xml` with Backup and Import buttons**
+- [x] **Step 3: Update `fragment_device_management.xml` with Backup and Import buttons**
 
 In `WeViewCam_android/app/src/main/res/layout/fragment_device_management.xml`:
 In the top action bar `LinearLayout`, add buttons:
@@ -847,7 +847,7 @@ In the top action bar `LinearLayout`, add buttons:
             style="@style/SurveillanceOutlineButton" />
 ```
 
-- [ ] **Step 4: Update `DeviceManagementFragment.java` to handle Export, Share, and Import**
+- [x] **Step 4: Update `DeviceManagementFragment.java` to handle Export, Share, and Import**
 
 Implement in `DeviceManagementFragment.java`:
 1. Register SAF launchers:
@@ -864,7 +864,7 @@ Implement in `DeviceManagementFragment.java`:
      - "完全覆盖" -> `deviceManager.importDevices(devices, true)`
    - Refreshes adapter & displays Toast with imported device count.
 
-- [ ] **Step 5: Run Android compilation & tests**
+- [x] **Step 5: Run Android compilation & tests**
 
 Run:
 ```bash
@@ -872,7 +872,7 @@ cd WeViewCam_android && ./gradlew assembleDebug
 ```
 Expected: BUILD SUCCESSFUL
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add WeViewCam_android/
@@ -889,7 +889,7 @@ git commit -m "feat(android): add SAF export, share intent and import UI in Devi
 **Interfaces:**
 - Consumes: JSON produced by Android Gson test, imported by Ubuntu Python DeviceManager.
 
-- [ ] **Step 1: Write cross-platform interop integration test in Ubuntu**
+- [x] **Step 1: Write cross-platform interop integration test in Ubuntu**
 
 Create `WeViewCam_ubuntu/tests/test_cross_platform_interop.py`:
 ```python
@@ -974,7 +974,7 @@ def test_android_to_ubuntu_to_android_simulation():
                 os.remove(p)
 ```
 
-- [ ] **Step 2: Run test to verify it passes**
+- [x] **Step 2: Run test to verify it passes**
 
 Run:
 ```bash
@@ -982,7 +982,7 @@ python -m pytest WeViewCam_ubuntu/tests/test_cross_platform_interop.py -v
 ```
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add WeViewCam_ubuntu/tests/test_cross_platform_interop.py
