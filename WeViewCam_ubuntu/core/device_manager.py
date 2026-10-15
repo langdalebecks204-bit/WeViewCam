@@ -196,46 +196,185 @@ class DeviceManager:
         except Exception as e:
             logger.error(f"保存设备配置失败: {e}")
 
+    def _normalize_device_dict(self, raw: dict) -> dict:
+        """Normalize raw dictionary to standard format handling camelCase and snake_case."""
+        device_id = raw.get("device_id") or raw.get("deviceId") or str(uuid.uuid4())
+        name = raw.get("name") or "未命名设备"
+        ip = raw.get("ip") or "127.0.0.1"
+        port = int(raw.get("port") or 8000)
+        username = raw.get("username") or "admin"
+        password = raw.get("password") or ""
+        protocol_str = str(raw.get("protocol") or "hikvision")
+        rtsp_port = int(raw.get("rtsp_port") or raw.get("rtspPort") or 554)
+        extra = raw.get("extra") or {}
+
+        channels_raw = raw.get("channels") or []
+        normalized_channels = []
+        for ch in channels_raw:
+            ch_no = int(ch.get("channel_no") or ch.get("channelNo") or 1)
+            ch_name = ch.get("name") or f"通道 {ch_no}"
+            is_online = ch.get("is_online", ch.get("isOnline", True))
+            is_ptz = ch.get("is_ptz", ch.get("isPtz", False))
+            ch_dev_id = ch.get("device_id") or ch.get("deviceId") or device_id
+            ch_extra = ch.get("extra") or {}
+            normalized_channels.append(ChannelInfo(
+                channel_no=ch_no,
+                name=ch_name,
+                is_online=bool(is_online),
+                is_ptz=bool(is_ptz),
+                device_id=ch_dev_id,
+                extra=ch_extra
+            ))
+
+        try:
+            protocol = ProtocolType(protocol_str.lower())
+        except ValueError:
+            protocol = ProtocolType.HIKVISION
+
+        return {
+            "device_id": device_id,
+            "name": name,
+            "ip": ip,
+            "port": port,
+            "username": username,
+            "password": password,
+            "protocol": protocol,
+            "rtsp_port": rtsp_port,
+            "channels": normalized_channels,
+            "extra": extra
+        }
+
+    def export_devices(self, target_path: str) -> bool:
+        """Export all configured devices to a JSON backup file."""
+        try:
+            dir_name = os.path.dirname(target_path)
+            if dir_name:
+                os.makedirs(dir_name, exist_ok=True)
+            data = []
+            for dev in self._devices.values():
+                dev_dict = {
+                    "device_id": dev.device_id,
+                    "name": dev.name,
+                    "ip": dev.ip,
+                    "port": dev.port,
+                    "username": dev.username,
+                    "password": dev.password,
+                    "protocol": dev.protocol.value if isinstance(dev.protocol, ProtocolType) else str(dev.protocol),
+                    "rtsp_port": dev.rtsp_port,
+                    "channels": [
+                        {
+                            "channel_no": ch.channel_no,
+                            "name": ch.name,
+                            "is_online": ch.is_online,
+                            "is_ptz": ch.is_ptz,
+                            "device_id": dev.device_id,
+                            "extra": ch.extra
+                        }
+                        for ch in dev.channels
+                    ],
+                    "extra": dev.extra
+                }
+                data.append(dev_dict)
+            with open(target_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.info(f"已成功导出 {len(data)} 台设备配置到 {target_path}")
+            return True
+        except Exception as e:
+            logger.error(f"导出设备配置失败: {e}")
+            return False
+
+    def import_devices(self, source_path: str, overwrite: bool = False) -> Tuple[bool, str, int]:
+        """Import devices from a backup JSON file."""
+        if not os.path.exists(source_path):
+            return False, f"文件不存在: {source_path}", 0
+
+        try:
+            with open(source_path, "r", encoding="utf-8") as f:
+                content = json.load(f)
+
+            if isinstance(content, dict):
+                raw_list = content.get("devices", [])
+            elif isinstance(content, list):
+                raw_list = content
+            else:
+                return False, "无效的配置文件格式，顶层结构必须为列表或包含 devices 的字典", 0
+
+            if not raw_list:
+                return False, "配置文件中没有检测到任何设备数据", 0
+
+            if overwrite:
+                for dev_id in list(self._devices.keys()):
+                    self.remove_device(dev_id)
+
+            imported_count = 0
+            for raw_dev in raw_list:
+                norm = self._normalize_device_dict(raw_dev)
+                dev_obj = DeviceInfo(
+                    device_id=norm["device_id"],
+                    name=norm["name"],
+                    ip=norm["ip"],
+                    port=norm["port"],
+                    username=norm["username"],
+                    password=norm["password"],
+                    protocol=norm["protocol"],
+                    rtsp_port=norm["rtsp_port"],
+                    channels=norm["channels"],
+                    is_connected=False,
+                    extra=norm["extra"]
+                )
+
+                # Check if device already exists by ID or (IP, Port)
+                existing_id = None
+                if dev_obj.device_id in self._devices:
+                    existing_id = dev_obj.device_id
+                else:
+                    for d_id, d in self._devices.items():
+                        if d.ip == dev_obj.ip and d.port == dev_obj.port:
+                            existing_id = d_id
+                            break
+
+                if existing_id:
+                    dev_obj.device_id = existing_id
+                    self.update_device(dev_obj)
+                else:
+                    self.add_device(dev_obj)
+
+                imported_count += 1
+
+            self.save_devices()
+            return True, f"成功导入 {imported_count} 台设备配置", imported_count
+        except Exception as e:
+            logger.error(f"导入设备配置异常: {e}")
+            return False, f"导入失败: {str(e)}", 0
+
     def load_devices(self):
         """Load devices from JSON config file."""
-        if not os.path.exists(self.config_path):
+        if not os.path.exists(self.config_path) or os.path.getsize(self.config_path) == 0:
             return
 
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
+            if isinstance(data, dict):
+                data = data.get("devices", [])
+            elif not isinstance(data, list):
+                data = []
+
             for item in data:
-                channels = [
-                    ChannelInfo(
-                        channel_no=ch["channel_no"],
-                        name=ch.get("name", f"Camera {ch['channel_no']}"),
-                        is_online=ch.get("is_online", True),
-                        is_ptz=ch.get("is_ptz", False),
-                        device_id=item["device_id"],
-                        extra=ch.get("extra", {})
-                    )
-                    for ch in item.get("channels", [])
-                ]
-
-                protocol_str = item.get("protocol", "hikvision")
-                try:
-                    protocol = ProtocolType(protocol_str)
-                except ValueError:
-                    protocol = ProtocolType.HIKVISION
-
+                norm = self._normalize_device_dict(item)
                 dev = DeviceInfo(
-                    device_id=item["device_id"],
-                    name=item.get("name", "Unnamed Device"),
-                    ip=item.get("ip", "127.0.0.1"),
-                    port=item.get("port", 8000),
-                    username=item.get("username", "admin"),
-                    password=item.get("password", ""),
-                    protocol=protocol,
-                    rtsp_port=item.get("rtsp_port", 554),
-                    channels=channels,
+                    device_id=norm["device_id"],
+                    name=norm["name"],
+                    ip=norm["ip"],
+                    port=norm["port"],
+                    username=norm["username"],
+                    password=norm["password"],
+                    protocol=norm["protocol"],
+                    rtsp_port=norm["rtsp_port"],
+                    channels=norm["channels"],
                     is_connected=False,
-                    extra=item.get("extra", {})
+                    extra=norm["extra"]
                 )
                 self._devices[dev.device_id] = dev
 
