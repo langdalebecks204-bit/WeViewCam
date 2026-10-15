@@ -11,8 +11,8 @@ android {
         applicationId "com.weviewcam.client"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "0.1.0"
+        versionCode 2
+        versionName "0.1.1"
 
         ndk {
             abiFilters 'arm64-v8a', 'armeabi-v7a'
@@ -61,7 +61,7 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 
-// 自动将构建生成的 APK 复制到项目根目录 (WeViewCam_android/)
+// 自动将构建生成的 APK 复制到项目根目录 (WeViewCam_android/ 及仓库根目录)
 tasks.register('copyApkToRoot') {
     doLast {
         def outputDir = file("${project.layout.buildDirectory.get().asFile}/outputs/apk")
@@ -85,12 +85,18 @@ tasks.register('copyApkToRoot') {
             }
             File preferredApk = releaseApk ?: debugApk
             if (preferredApk != null) {
+                def releaseApkName = "weviewcam_android_v${android.defaultConfig.versionName}.apk"
                 copy {
                     from preferredApk
                     into rootProject.projectDir
-                    rename { "weviewcam_android_v${android.defaultConfig.versionName}.apk" }
+                    rename { releaseApkName }
                 }
-                println ">>> [Auto-Copy] Preferred signed APK copied as weviewcam_android_v${android.defaultConfig.versionName}.apk from ${preferredApk.name}"
+                copy {
+                    from preferredApk
+                    into rootProject.projectDir.parentFile
+                    rename { releaseApkName }
+                }
+                println ">>> [Auto-Copy] Preferred signed APK copied as ${releaseApkName} to ${rootProject.projectDir} and ${rootProject.projectDir.parentFile}"
             }
         }
     }

@@ -50,7 +50,7 @@ WeViewCam/
 │   │   ├── libs/               # Hikvision Android Java SDK (HCNetSDK.jar, jna.jar)
 │   │   └── src/main/jniLibs/   # Hikvision native .so libraries (arm64-v8a, armeabi-v7a)
 │   ├── gradlew / gradlew.bat   # Gradle build tools
-│   ├── weviewcam_android_v0.1.0.apk # Pre-built release APK
+│   ├── weviewcam_android_v0.1.1.apk # Pre-built release APK
 │   └── README.md               # Detailed Android documentation
 └── README.md                   # Repository overview
 ```
@@ -95,7 +95,7 @@ WeViewCam/
    - 原生集成海康威视最新版 Android SDK 与 JNA 动态库，支持 `arm64-v8a` 与 `armeabi-v7a` 架构；
    - 基于 Android 原生 `SurfaceView` 实现硬件加速直传渲染，CPU 与功耗占用极低；
    - 支持单画面与四分屏切换、云台触控操作、通道在线状态检测、异步历史录像检索与高精度时间轴回放；
-   - 包含已构建好的发布版本安装包：[`weviewcam_android_v0.1.0.apk`](./WeViewCam_android/weviewcam_android_v0.1.0.apk)。
+   - 包含已构建好的发布版本安装包：[`weviewcam_android_v0.1.1.apk`](./WeViewCam_android/weviewcam_android_v0.1.1.apk) 与根目录 [`weviewcam_android_v0.1.1.apk`](./weviewcam_android_v0.1.1.apk)。
 
 ---
 
@@ -113,7 +113,7 @@ bash run.sh
 ```
 
 #### 2. Android 移动版本
-- **直接安装**：将 [`WeViewCam_android/weviewcam_android_v0.1.0.apk`](./WeViewCam_android/weviewcam_android_v0.1.0.apk) 传输至 Android 设备即可一键安装使用。
+- **直接安装**：将 [`weviewcam_android_v0.1.1.apk`](./weviewcam_android_v0.1.1.apk) 传输至 Android 设备即可一键安装使用。
 - **源码编译**：
   ```bash
   cd WeViewCam_android
