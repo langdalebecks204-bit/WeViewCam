@@ -6,6 +6,9 @@ import android.os.Looper;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.weviewcam.client.core.adapter.BaseDeviceAdapter;
 import com.weviewcam.client.core.adapter.DeviceAdapterFactory;
@@ -110,6 +113,68 @@ public class DeviceManager {
         } catch (Exception e) {
             AppLogger.e(MODULE, "保存设备配置失败", e);
         }
+    }
+
+    public synchronized String exportDevicesJson() {
+        return gson.toJson(devices);
+    }
+
+    public List<DeviceInfo> parseDevicesJson(String jsonString) {
+        if (jsonString == null || jsonString.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            JsonElement element = JsonParser.parseString(jsonString);
+            Type listType = new TypeToken<List<DeviceInfo>>() {}.getType();
+            if (element.isJsonArray()) {
+                return gson.fromJson(element, listType);
+            } else if (element.isJsonObject()) {
+                JsonObject obj = element.getAsJsonObject();
+                if (obj.has("devices") && obj.get("devices").isJsonArray()) {
+                    return gson.fromJson(obj.get("devices"), listType);
+                }
+            }
+        } catch (Exception e) {
+            AppLogger.e(MODULE, "解析设备备份 JSON 失败: " + e.getMessage());
+        }
+        return new ArrayList<>();
+    }
+
+    public synchronized int importDevices(List<DeviceInfo> newDevices, boolean overwriteAll) {
+        if (newDevices == null || newDevices.isEmpty()) {
+            return 0;
+        }
+
+        if (overwriteAll) {
+            devices.clear();
+            devices.addAll(newDevices);
+            saveDevices();
+            return newDevices.size();
+        }
+
+        int count = 0;
+        for (DeviceInfo newDev : newDevices) {
+            if (newDev == null) continue;
+            boolean updated = false;
+            for (int i = 0; i < devices.size(); i++) {
+                DeviceInfo existing = devices.get(i);
+                if ((newDev.getDeviceId() != null && newDev.getDeviceId().equals(existing.getDeviceId()))
+                        || (newDev.getIp() != null && newDev.getIp().equals(existing.getIp()) && newDev.getPort() == existing.getPort())) {
+                    newDev.setDeviceId(existing.getDeviceId());
+                    devices.set(i, newDev);
+                    updated = true;
+                    count++;
+                    break;
+                }
+            }
+            if (!updated) {
+                devices.add(newDev);
+                count++;
+            }
+        }
+
+        saveDevices();
+        return count;
     }
 
     private synchronized void loadDevices() {

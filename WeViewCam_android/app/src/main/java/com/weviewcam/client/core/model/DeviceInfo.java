@@ -1,5 +1,7 @@
 package com.weviewcam.client.core.model;
 
+import com.google.gson.annotations.SerializedName;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -8,16 +10,37 @@ import java.util.Map;
 import java.util.UUID;
 
 public class DeviceInfo implements Serializable {
+    @SerializedName(value = "device_id", alternate = {"deviceId"})
     private String deviceId;
+
+    @SerializedName("name")
     private String name;
+
+    @SerializedName("ip")
     private String ip;
+
+    @SerializedName("port")
     private int port;
+
+    @SerializedName("username")
     private String username;
+
+    @SerializedName("password")
     private String password;
+
+    @SerializedName("protocol")
     private ProtocolType protocol;
+
+    @SerializedName(value = "rtsp_port", alternate = {"rtspPort"})
     private int rtspPort;
+
+    @SerializedName("channels")
     private List<ChannelInfo> channels;
+
+    @SerializedName(value = "is_connected", alternate = {"isConnected"})
     private boolean isConnected;
+
+    @SerializedName("extra")
     private Map<String, Object> extra;
 
     public DeviceInfo() {

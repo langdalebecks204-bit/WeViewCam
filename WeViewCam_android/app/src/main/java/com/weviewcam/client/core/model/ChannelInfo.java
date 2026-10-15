@@ -1,15 +1,28 @@
 package com.weviewcam.client.core.model;
 
+import com.google.gson.annotations.SerializedName;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
 public class ChannelInfo implements Serializable {
+    @SerializedName(value = "channel_no", alternate = {"channelNo"})
     private int channelNo;
+
+    @SerializedName("name")
     private String name;
+
+    @SerializedName(value = "is_online", alternate = {"isOnline"})
     private boolean isOnline;
+
+    @SerializedName(value = "is_ptz", alternate = {"isPtz"})
     private boolean isPtz;
+
+    @SerializedName(value = "device_id", alternate = {"deviceId"})
     private String deviceId;
+
+    @SerializedName("extra")
     private Map<String, Object> extra = new HashMap<>();
 
     public ChannelInfo() {
