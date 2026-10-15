@@ -89,6 +89,20 @@ class DeviceTreeWidget(QWidget):
         btn_add.clicked.connect(self.add_device_requested.emit)
         header_layout.addWidget(btn_add)
 
+        self.btn_export = QPushButton("📤", self)
+        self.btn_export.setFixedSize(24, 24)
+        self.btn_export.setToolTip("备份并导出设备配置到文件")
+        self.btn_export.setStyleSheet("QPushButton { font-size: 13px; padding: 0; }")
+        self.btn_export.clicked.connect(self.on_export_clicked)
+        header_layout.addWidget(self.btn_export)
+
+        self.btn_import = QPushButton("📥", self)
+        self.btn_import.setFixedSize(24, 24)
+        self.btn_import.setToolTip("从文件导入设备配置备份")
+        self.btn_import.setStyleSheet("QPushButton { font-size: 13px; padding: 0; }")
+        self.btn_import.clicked.connect(self.on_import_clicked)
+        header_layout.addWidget(self.btn_import)
+
         btn_refresh = QPushButton("↻", self)
         btn_refresh.setFixedSize(24, 24)
         btn_refresh.setToolTip("刷新设备列表与状态")
@@ -192,6 +206,19 @@ class DeviceTreeWidget(QWidget):
     def _show_context_menu(self, pos):
         item = self.tree.itemAt(pos)
         if not item:
+            menu = QMenu(self)
+            menu.setStyleSheet("QMenu { background-color: #21262d; border: 1px solid #30363d; color: #c9d1d9; }")
+            act_add = menu.addAction("＋ 添加新设备")
+            act_add.triggered.connect(self.add_device_requested.emit)
+            menu.addSeparator()
+            act_import = menu.addAction("📥 导入设备配置")
+            act_import.triggered.connect(self.on_import_clicked)
+            act_export = menu.addAction("📤 导出设备配置")
+            act_export.triggered.connect(self.on_export_clicked)
+            menu.addSeparator()
+            act_refresh = menu.addAction("🔄 刷新设备列表")
+            act_refresh.triggered.connect(self.refresh_devices)
+            menu.exec_(self.tree.mapToGlobal(pos))
             return
 
         data = item.data(0, Qt.UserRole)
@@ -265,3 +292,64 @@ class DeviceTreeWidget(QWidget):
         if reply == QMessageBox.Yes:
             self.delete_device_requested.emit(device_id)
             self.refresh_devices()
+
+    def on_export_clicked(self):
+        """Handle export devices action."""
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        devices = self.device_manager.list_devices()
+        if not devices:
+            QMessageBox.information(self, "提示", "当前没有可导出的设备配置")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出设备配置备份",
+            "weviewcam_devices_backup.json",
+            "JSON 文件 (*.json);;所有文件 (*.*)"
+        )
+        if not file_path:
+            return
+
+        success = self.device_manager.export_devices(file_path)
+        if success:
+            QMessageBox.information(self, "导出成功", f"成功导出 {len(devices)} 台设备配置到:\n{file_path}")
+        else:
+            QMessageBox.critical(self, "导出失败", "导出设备配置文件时发生错误，请查看运行日志")
+
+    def on_import_clicked(self):
+        """Handle import devices action."""
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择要导入的设备配置备份",
+            "",
+            "JSON 文件 (*.json);;所有文件 (*.*)"
+        )
+        if not file_path:
+            return
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("选择导入模式")
+        msg_box.setText("请选择设备配置的导入模式：")
+        msg_box.setInformativeText(
+            "【增量合并】：若已存在相同设备则更新覆盖，新设备自动追加（推荐）。\n"
+            "【完全覆盖】：清空当前所有设备，完全替换为备份文件内容。"
+        )
+        btn_merge = msg_box.addButton("增量合并", QMessageBox.ActionRole)
+        btn_overwrite = msg_box.addButton("完全覆盖", QMessageBox.DestructiveRole)
+        btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
+        msg_box.setDefaultButton(btn_merge)
+
+        msg_box.exec_()
+        clicked = msg_box.clickedButton()
+        if clicked == btn_cancel:
+            return
+
+        is_overwrite = (clicked == btn_overwrite)
+        success, message, count = self.device_manager.import_devices(file_path, overwrite=is_overwrite)
+        if success:
+            self.refresh_devices()
+            QMessageBox.information(self, "导入完成", f"{message}\n设备列表已自动刷新。")
+        else:
+            QMessageBox.warning(self, "导入失败", message)
+

@@ -113,3 +113,22 @@ def test_import_camel_case_compatibility():
             os.remove(bak_path)
         if os.path.exists(cfg_path):
             os.remove(cfg_path)
+
+
+def test_device_tree_widget_backup_buttons():
+    from PyQt5.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        tmp_cfg = f.name
+    try:
+        mgr = DeviceManager(config_path=tmp_cfg)
+        from ui.device_tree_widget import DeviceTreeWidget
+        widget = DeviceTreeWidget(mgr)
+        assert hasattr(widget, "btn_export")
+        assert hasattr(widget, "btn_import")
+        assert widget.btn_export.toolTip() != ""
+        assert widget.btn_import.toolTip() != ""
+    finally:
+        if os.path.exists(tmp_cfg):
+            os.remove(tmp_cfg)
