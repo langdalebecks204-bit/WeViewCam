@@ -46,6 +46,8 @@ public class PlaybackFragment extends Fragment {
     private SurveillanceSurfaceView viewportPlayback;
     private TextView tvPlaybackTime;
     private TimelineBarView timelineBar;
+    private Button btnAspectRatio;
+    private SurveillanceSurfaceView.AspectRatioMode currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
 
     private Button btnPlay;
     private Button btnStop;
@@ -100,6 +102,13 @@ public class PlaybackFragment extends Fragment {
         btnFast = root.findViewById(R.id.btn_playback_fast);
         btnStep = root.findViewById(R.id.btn_playback_step);
         btnSnapshot = root.findViewById(R.id.btn_playback_snapshot);
+        btnAspectRatio = root.findViewById(R.id.btn_playback_aspect_ratio);
+        if (btnAspectRatio != null) {
+            btnAspectRatio.setText(currentAspectRatio.getLabel());
+        }
+        if (viewportPlayback != null) {
+            viewportPlayback.setAspectRatioMode(currentAspectRatio);
+        }
 
         btnSelectDate.setText(dateFormat.format(selectedCalendar.getTime()));
     }
@@ -107,6 +116,9 @@ public class PlaybackFragment extends Fragment {
     private void setupListeners() {
         btnSelectDate.setOnClickListener(v -> showDatePicker());
         btnSearchRecords.setOnClickListener(v -> searchRecords());
+        if (btnAspectRatio != null) {
+            btnAspectRatio.setOnClickListener(v -> cycleAspectRatio());
+        }
 
         // Zoom buttons
         requireView().findViewById(R.id.btn_zoom_24h).setOnClickListener(v -> timelineBar.setZoomDurationHours(24f));
@@ -341,6 +353,23 @@ public class PlaybackFragment extends Fragment {
 
         currentAdapter.capturePicture(playbackHandle, photo.getAbsolutePath());
         Toast.makeText(getContext(), "回放抓图已保存", Toast.LENGTH_SHORT).show();
+    }
+
+    private void cycleAspectRatio() {
+        if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9) {
+            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3;
+        } else if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3) {
+            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_FILL;
+        } else {
+            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
+        }
+        if (btnAspectRatio != null) {
+            btnAspectRatio.setText(currentAspectRatio.getLabel());
+        }
+        if (viewportPlayback != null) {
+            viewportPlayback.setAspectRatioMode(currentAspectRatio);
+        }
+        Toast.makeText(getContext(), "录像画面比例: " + currentAspectRatio.getLabel(), Toast.LENGTH_SHORT).show();
     }
 
     @Override

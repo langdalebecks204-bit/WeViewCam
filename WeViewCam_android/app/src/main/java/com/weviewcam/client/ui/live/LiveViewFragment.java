@@ -60,6 +60,8 @@ public class LiveViewFragment extends Fragment {
     private Button btnPlayAll;
     private Button btnToggleSplit;
     private Button btnStreamQuality;
+    private Button btnAspectRatio;
+    private SurveillanceSurfaceView.AspectRatioMode currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
     private Button btnLiveSnapshot;
     private Button btnLiveRecord;
     private Button btnTogglePtz;
@@ -122,6 +124,10 @@ public class LiveViewFragment extends Fragment {
         btnToggleSplit = root.findViewById(R.id.btn_toggle_split);
         btnStreamQuality = root.findViewById(R.id.btn_stream_quality);
         btnStreamQuality.setText(currentStreamType == 0 ? "主码流" : "子码流");
+        btnAspectRatio = root.findViewById(R.id.btn_aspect_ratio);
+        if (btnAspectRatio != null) {
+            btnAspectRatio.setText(currentAspectRatio.getLabel());
+        }
         btnLiveSnapshot = root.findViewById(R.id.btn_live_snapshot);
         btnLiveRecord = root.findViewById(R.id.btn_live_record);
         btnTogglePtz = root.findViewById(R.id.btn_toggle_ptz);
@@ -271,9 +277,23 @@ public class LiveViewFragment extends Fragment {
             );
             elvTree.setAdapter(adapter);
 
-            // Expand all NVR groups by default for convenience
-            for (int i = 0; i < validDevices.size(); i++) {
-                elvTree.expandGroup(i);
+            // Accordion behavior: expanding one device collapses others
+            elvTree.setOnGroupExpandListener(groupPosition -> {
+                for (int i = 0; i < validDevices.size(); i++) {
+                    if (i != groupPosition && elvTree.isGroupExpanded(i)) {
+                        elvTree.collapseGroup(i);
+                    }
+                }
+            });
+
+            // Auto-expand only the device containing the currently active channel, otherwise keep all collapsed
+            if (currentCh != null && currentCh.getDeviceId() != null) {
+                for (int i = 0; i < validDevices.size(); i++) {
+                    if (currentCh.getDeviceId().equals(validDevices.get(i).getDeviceId())) {
+                        elvTree.expandGroup(i);
+                        break;
+                    }
+                }
             }
         }
 
@@ -345,6 +365,10 @@ public class LiveViewFragment extends Fragment {
                 startPlayOnViewport(activeViewport, activeViewport.getChannelInfo());
             }
         });
+
+        if (btnAspectRatio != null) {
+            btnAspectRatio.setOnClickListener(v -> cycleAspectRatio());
+        }
 
         btnLiveSnapshot.setOnClickListener(v -> takeSnapshot());
 
@@ -676,6 +700,26 @@ public class LiveViewFragment extends Fragment {
                 layoutPtzPanel.setLayoutParams(ptzParams);
             }
         }
+    }
+
+    private void cycleAspectRatio() {
+        if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9) {
+            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3;
+        } else if (currentAspectRatio == SurveillanceSurfaceView.AspectRatioMode.RATIO_4_3) {
+            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_FILL;
+        } else {
+            currentAspectRatio = SurveillanceSurfaceView.AspectRatioMode.RATIO_16_9;
+        }
+        if (btnAspectRatio != null) {
+            btnAspectRatio.setText(currentAspectRatio.getLabel());
+        }
+        for (SurveillanceSurfaceView vp : viewports) {
+            if (vp != null) vp.setAspectRatioMode(currentAspectRatio);
+        }
+        if (viewportSingle != null) {
+            viewportSingle.setAspectRatioMode(currentAspectRatio);
+        }
+        Toast.makeText(getContext(), "画面比例已切换至: " + currentAspectRatio.getLabel(), Toast.LENGTH_SHORT).show();
     }
 
     private int dpToPx(int dp) {
