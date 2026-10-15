@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/GUI-PyQt5-41CD52?logo=qt" alt="PyQt5">
     <img src="https://img.shields.io/badge/Video-LibVLC%20%7C%20OpenCV-FF5722" alt="Video Engines">
     <img src="https://img.shields.io/badge/SDK-Hikvision%20%26%20ONVIF-brightgreen" alt="Supported SDKs">
-    <img src="https://img.shields.io/badge/Release-v0.1.0-orange" alt="Release">
+    <img src="https://img.shields.io/badge/Release-v0.1.1-orange" alt="Release">
   </p>
 </div>
 
@@ -56,7 +56,8 @@ The system adopts a decoupled, modular architecture:
    - Add, edit, remove devices with local persistent storage in `config/devices.json`.
    - One-click "Test Connection" with automatic channel count detection.
 5. **Ubuntu Desktop Experience**:
-   - Ready-to-use standalone release tarball (`weviewcam_ubuntu_v0.1.0.tar.gz`).
+   - Ready-to-use standalone release tarball (`weviewcam_ubuntu_v0.1.1.tar.gz`).
+   - One-click installer `install.sh` for dependencies and desktop shortcut generation.
    - Auto-configures Python virtual environments and resolves Linux Chinese input method (IBus / Fcitx) integration.
 
 ---
@@ -101,9 +102,10 @@ WeViewCam/
 │   ├── test_device_manager.py
 │   ├── test_onvif.py
 │   └── test_timeline.py
-├── weviewcam_ubuntu_v0.1.0.tar.gz       # Standalone Ubuntu release package
+├── weviewcam_ubuntu_v0.1.1.tar.gz       # Standalone Ubuntu release package
 ├── requirements.txt                     # Python dependencies
-├── setup_env.sh                         # One-click environment initialization
+├── install.sh                           # One-click installation & desktop shortcut creator
+├── setup_env.sh                         # Environment initialization & venv builder
 ├── install_desktop_shortcut.sh          # Desktop shortcut installer
 ├── run.sh                               # Startup script with library path exports
 ├── package.sh / pack.ps1                # Packaging scripts
@@ -118,14 +120,16 @@ WeViewCam/
 
 #### Option A: Quick Run with Release Package
 
-1. Download or locate `weviewcam_ubuntu_v0.1.0.tar.gz`.
+1. Download or locate `weviewcam_ubuntu_v0.1.1.tar.gz`.
 2. Extract the archive:
    ```bash
-   tar -xzvf weviewcam_ubuntu_v0.1.0.tar.gz
+   tar -xzvf weviewcam_ubuntu_v0.1.1.tar.gz
    cd WeViewCam
    ```
-3. Run the automated installer:
+3. Run the one-click installer:
    ```bash
+   bash install.sh
+   # or
    bash setup_env.sh
    ```
 4. Launch the application:
@@ -199,10 +203,11 @@ python3 -m pytest tests/ -v
    - 完整播控支持：播放、暂停、快进 (2x/4x/8x/16x)、慢放 (1/2x, 1/4x)、单帧步进、截图保存。
 4. **设备管理中心**：
    - 设备增删改查，配置持久化保存在 `config/devices.json`；
+   - 支持跨平台配置一键备份与还原，格式与 Android 客户端完全互通；
    - 一键“测试连接”，验证网络连通并自动探测通道总数。
 5. **开箱即用的安装包与自动化脚本**：
-   - 附带精简独立的 Ubuntu 预编译安装包 `weviewcam_ubuntu_v0.1.0.tar.gz`；
-   - 提供 `setup_env.sh` 与 `run.sh` 脚本，全自动配置依赖并生成桌面图标。
+   - 附带精简独立的 Ubuntu 预编译安装包 `weviewcam_ubuntu_v0.1.1.tar.gz`；
+   - 提供 `install.sh`、`setup_env.sh` 与 `run.sh` 脚本，全自动配置依赖并生成桌面图标。
 
 ---
 
@@ -210,15 +215,15 @@ python3 -m pytest tests/ -v
 
 #### 方式一：使用发布安装包直接部署 (推荐)
 
-1. 获取发布安装包 `weviewcam_ubuntu_v0.1.0.tar.gz`。
+1. 获取发布安装包 `weviewcam_ubuntu_v0.1.1.tar.gz`。
 2. 解压安装包：
    ```bash
-   tar -xzvf weviewcam_ubuntu_v0.1.0.tar.gz
+   tar -xzvf weviewcam_ubuntu_v0.1.1.tar.gz
    cd WeViewCam
    ```
-3. 执行一键环境初始化：
+3. 执行一键安装：
    ```bash
-   bash setup_env.sh
+   bash install.sh
    ```
    > 提示：脚本会自动创建隔离的 Python 虚拟环境，安装所需依赖，并在桌面与应用程序菜单中自动生成【WeViewCam 监控系统】快捷方式。
 4. 启动程序：

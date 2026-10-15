@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Ubuntu-PyQt5%20%7C%20Python3-41CD52?logo=qt" alt="Ubuntu Tech">
     <img src="https://img.shields.io/badge/Android-Java%20%7C%20SurfaceView-3DDC84?logo=android" alt="Android Tech">
     <img src="https://img.shields.io/badge/SDK-Hikvision%20%26%20ONVIF-brightgreen" alt="Supported SDKs">
-    <img src="https://img.shields.io/badge/Release-v0.1.0-orange" alt="Release">
+    <img src="https://img.shields.io/badge/Release-v0.1.1-orange" alt="Release">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
   </p>
 </div>
@@ -43,7 +43,11 @@ WeViewCam/
 │   ├── core/                   # Device management, base adapter & player controller
 │   ├── ui/                     # Multi-split live view, PTZ panel & 24h timeline
 │   ├── sdk/hikvision/lib/      # Official Hikvision Linux 64-bit native libraries
+│   ├── install.sh              # One-click installation & desktop shortcut creator
+│   ├── setup_env.sh            # Environment initialization & venv builder
+│   ├── run.sh                  # Execution runner script
 │   ├── package.sh              # Standalone package creation script
+│   ├── weviewcam_ubuntu_v0.1.1.tar.gz # Standalone Ubuntu release package
 │   └── README.md               # Detailed Ubuntu documentation
 ├── WeViewCam_android/          # Android Mobile Client (Java + Native SDK)
 │   ├── app/                    # Native Android application module
@@ -52,6 +56,8 @@ WeViewCam/
 │   ├── gradlew / gradlew.bat   # Gradle build tools
 │   ├── weviewcam_android_v0.1.1.apk # Pre-built release APK
 │   └── README.md               # Detailed Android documentation
+├── weviewcam_ubuntu_v0.1.1.tar.gz # Root pre-built Ubuntu release package
+├── weviewcam_android_v0.1.1.apk   # Root pre-built Android release package
 └── README.md                   # Repository overview
 ```
 
@@ -88,13 +94,14 @@ WeViewCam/
    - 专为 **Ubuntu Linux (x86_64)** 打造的桌面客户端；
    - 基于 Python 3 + PyQt5 架构，采用现代化深色监控 UI 风格；
    - 原生封装海康 Linux 64 位官方 SDK（`libhcnetsdk.so`、`libPlayCtrl.so`），配合 LibVLC 与 OpenCV 双引擎实现极低延迟拉流；
-   - 支持 1 / 4 / 9 / 16 多分屏切换、8 方向 PTZ 遥控、24 小时录像检索及交互式时间轴回放。
+   - 支持 1 / 4 / 9 / 16 多分屏切换、8 方向 PTZ 遥控、24 小时录像检索及交互式时间轴回放；
+   - 提供 `install.sh` 一键安装脚本与独立发布包 [`weviewcam_ubuntu_v0.1.1.tar.gz`](./weviewcam_ubuntu_v0.1.1.tar.gz)。
 
 2. **[WeViewCam_android](./WeViewCam_android/)**：
    - 专为 **Android 手机与平板设备** 打造的原生移动端应用；
    - 原生集成海康威视最新版 Android SDK 与 JNA 动态库，支持 `arm64-v8a` 与 `armeabi-v7a` 架构；
    - 基于 Android 原生 `SurfaceView` 实现硬件加速直传渲染，CPU 与功耗占用极低；
-   - 支持单画面与四分屏切换、云台触控操作、通道在线状态检测、异步历史录像检索与高精度时间轴回放；
+   - 支持单画面与四分屏切换、云台触控操作、通道在线状态检测、异步历史录像检索、横屏全屏监控与高精度时间轴回放；
    - 包含已构建好的发布版本安装包：[`weviewcam_android_v0.1.1.apk`](./WeViewCam_android/weviewcam_android_v0.1.1.apk) 与根目录 [`weviewcam_android_v0.1.1.apk`](./weviewcam_android_v0.1.1.apk)。
 
 ---
@@ -105,10 +112,10 @@ WeViewCam/
 ```bash
 cd WeViewCam_ubuntu
 
-# 初始化虚拟环境并安装依赖
-bash setup_env.sh
+# 一键安装环境并创建桌面图标
+bash install.sh
 
-# 启动客户端
+# 启动客户端 (或直接双击桌面图标)
 bash run.sh
 ```
 
