@@ -55,7 +55,6 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
     private final SurveillanceSurfaceView[] viewports = new SurveillanceSurfaceView[4];
     private SurveillanceSurfaceView activeViewport;
 
-    private Button btnActiveViewport;
     private Button btnChannelSelect;
     private Button btnLivePlay;
     private Button btnPlayAll;
@@ -121,7 +120,6 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
         viewports[2] = root.findViewById(R.id.viewport_2);
         viewports[3] = root.findViewById(R.id.viewport_3);
 
-        btnActiveViewport = root.findViewById(R.id.btn_active_viewport);
         btnChannelSelect = root.findViewById(R.id.btn_channel_select);
         btnLivePlay = root.findViewById(R.id.btn_live_play);
         btnPlayAll = root.findViewById(R.id.btn_play_all);
@@ -195,18 +193,7 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
     }
 
     private void updateActiveViewportBadge() {
-        if (btnActiveViewport == null) return;
-        if (!is4Split) {
-            btnActiveViewport.setText("单画面");
-            return;
-        }
-        int index = getViewportIndex(activeViewport);
-        String[] titles = new String[]{"视口 1", "视口 2", "视口 3", "视口 4"};
-        if (index >= 0 && index < titles.length) {
-            btnActiveViewport.setText(titles[index]);
-        } else {
-            btnActiveViewport.setText("视口 1");
-        }
+        // No-op: active viewport indicator button removed per user requirement
     }
 
     private int getViewportIndex(SurveillanceSurfaceView vp) {
@@ -221,11 +208,10 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
         if (info != null) {
             DeviceInfo dev = (deviceManager != null) ? deviceManager.getDevice(info.getDeviceId()) : null;
             String devName = (dev != null && dev.getName() != null && !dev.getName().trim().isEmpty()) ? dev.getName() : "";
-            String prefix = devName.isEmpty() ? "" : (devName + ":");
-            String status = info.isOnline() ? " [在线] ▼" : " [离线] ▼";
-            btnChannelSelect.setText(prefix + info.getName() + status);
+            String label = devName.isEmpty() ? info.getName() : (devName + "-" + info.getName());
+            btnChannelSelect.setText(label);
         } else {
-            btnChannelSelect.setText("选择通道 ▼");
+            btnChannelSelect.setText("选择通道");
         }
     }
 
@@ -338,17 +324,6 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
 
     @SuppressLint("ClickableViewAccessibility")
     private void setupListeners() {
-        btnActiveViewport.setOnClickListener(v -> {
-            if (!is4Split) {
-                Toast.makeText(getContext(), "当前处于单画面模式，双击画面或点击'四分屏'可返回", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            int current = getViewportIndex(activeViewport);
-            int next = (current + 1) % 4;
-            selectViewport(viewports[next]);
-            Toast.makeText(getContext(), "已切换操作视口: 视口 " + (next + 1), Toast.LENGTH_SHORT).show();
-        });
-
         btnChannelSelect.setOnClickListener(v -> {
             showChannelPickerDialog(activeViewport);
         });
@@ -688,7 +663,7 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
                 layoutToolbar.setOrientation(LinearLayout.HORIZONTAL);
                 LinearLayout.LayoutParams p1 = new LinearLayout.LayoutParams(0, dpToPx(34), 1.0f);
                 layoutToolbarRow1.setLayoutParams(p1);
-                LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(0, dpToPx(34), 1.15f);
+                LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(0, dpToPx(34), 1.0f);
                 p2.setMarginStart(dpToPx(8));
                 p2.topMargin = 0;
                 layoutToolbarRow2.setLayoutParams(p2);

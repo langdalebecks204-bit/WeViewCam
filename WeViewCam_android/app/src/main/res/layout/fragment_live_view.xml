@@ -18,7 +18,7 @@
         android:paddingTop="4dp"
         android:paddingBottom="4dp">
 
-        <!-- Row 1: Channel & Split Mode Configuration (Unified heights and proportional weights) -->
+        <!-- Row 1: Channel & Split Mode Configuration (5 uniform buttons) -->
         <LinearLayout
             android:id="@+id/layout_toolbar_row1"
             android:layout_width="match_parent"
@@ -27,20 +27,14 @@
             android:gravity="center_vertical">
 
             <Button
-                android:id="@+id/btn_active_viewport"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:text="视口 1"
-                style="@style/SurveillanceAccentButton" />
-
-            <Button
                 android:id="@+id/btn_channel_select"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="1.4"
-                android:layout_marginStart="4dp"
-                android:text="选择通道 ▼"
+                android:layout_weight="1"
+                android:text="选择通道"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 android:gravity="center"
                 android:ellipsize="end"
                 android:maxLines="1"
@@ -60,37 +54,49 @@
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="四分屏"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_stream_quality"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.9"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="子码流"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_aspect_ratio"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.8"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="16:9"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceButton" />
 
             <Button
                 android:id="@+id/btn_fullscreen"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
-                android:layout_weight="0.85"
+                android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="全屏"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceAccentButton" />
         </LinearLayout>
 
-        <!-- Row 2: Live Controls & Action Buttons (Identical 34dp height and equal 1:1:1:1:1 distribution) -->
+        <!-- Row 2: Live Controls & Action Buttons (5 uniform buttons) -->
         <LinearLayout
             android:id="@+id/layout_toolbar_row2"
             android:layout_width="match_parent"
@@ -105,6 +111,9 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:text="播放"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceAccentButton" />
 
             <Button
@@ -114,6 +123,9 @@
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="全部播放"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceButton" />
 
             <Button
@@ -123,6 +135,9 @@
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="抓图"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceButton" />
 
             <Button
@@ -132,6 +147,9 @@
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="录像"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceButton" />
 
             <Button
@@ -141,6 +159,9 @@
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:text="云台"
+                android:textSize="12sp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 style="@style/SurveillanceButton" />
         </LinearLayout>
     </LinearLayout>
