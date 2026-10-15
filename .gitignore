@@ -12,6 +12,10 @@ desktop.ini
 *.swp
 *.swo
 
+# Development documentation & plans
+docs/
+doc/
+
 # ==========================================
 # Android Build & Temporary Files
 # ==========================================
