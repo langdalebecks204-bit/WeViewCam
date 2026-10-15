@@ -23,6 +23,25 @@ import com.weviewcam.client.core.model.ChannelInfo;
 
 public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolder.Callback {
 
+    public enum AspectRatioMode {
+        RATIO_16_9("16:9", 16.0f / 9.0f),
+        RATIO_4_3("4:3", 4.0f / 3.0f),
+        RATIO_FILL("铺满", 0f);
+
+        private final String label;
+        private final float ratio;
+
+        AspectRatioMode(String label, float ratio) {
+            this.label = label;
+            this.ratio = ratio;
+        }
+
+        public String getLabel() { return label; }
+        public float getRatio() { return ratio; }
+    }
+
+    private AspectRatioMode aspectRatioMode = AspectRatioMode.RATIO_16_9;
+
     public interface OnViewportClickListener {
         void onViewportClicked(SurveillanceSurfaceView viewport);
         void onViewportDoubleClicked(SurveillanceSurfaceView viewport);
@@ -153,6 +172,70 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
             return true;
         }
         return super.onTouchEvent(event);
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int containerWidth = getMeasuredWidth();
+        int containerHeight = getMeasuredHeight();
+
+        if (containerWidth <= 0 || containerHeight <= 0 || surfaceView == null) {
+            return;
+        }
+
+        int targetWidth = containerWidth;
+        int targetHeight = containerHeight;
+
+        if (aspectRatioMode != null && aspectRatioMode.getRatio() > 0) {
+            float desiredRatio = aspectRatioMode.getRatio();
+            float containerRatio = (float) containerWidth / containerHeight;
+
+            if (containerRatio > desiredRatio) {
+                // Container is wider than desired ratio -> fit height, pillarbox left/right
+                targetHeight = containerHeight;
+                targetWidth = Math.round(containerHeight * desiredRatio);
+            } else {
+                // Container is taller than desired ratio -> fit width, letterbox top/bottom
+                targetWidth = containerWidth;
+                targetHeight = Math.round(containerWidth / desiredRatio);
+            }
+        }
+
+        int childWidthSpec = MeasureSpec.makeMeasureSpec(targetWidth, MeasureSpec.EXACTLY);
+        int childHeightSpec = MeasureSpec.makeMeasureSpec(targetHeight, MeasureSpec.EXACTLY);
+        surfaceView.measure(childWidthSpec, childHeightSpec);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+
+        if (surfaceView != null) {
+            int containerWidth = right - left;
+            int containerHeight = bottom - top;
+            int surfaceWidth = surfaceView.getMeasuredWidth();
+            int surfaceHeight = surfaceView.getMeasuredHeight();
+
+            int l = (containerWidth - surfaceWidth) / 2;
+            int t = (containerHeight - surfaceHeight) / 2;
+            int r = l + surfaceWidth;
+            int b = t + surfaceHeight;
+            surfaceView.layout(l, t, r, b);
+        }
+    }
+
+    public void setAspectRatioMode(AspectRatioMode mode) {
+        if (mode == null) mode = AspectRatioMode.RATIO_16_9;
+        if (this.aspectRatioMode != mode) {
+            this.aspectRatioMode = mode;
+            requestLayout();
+            invalidate();
+        }
+    }
+
+    public AspectRatioMode getAspectRatioMode() {
+        return aspectRatioMode;
     }
 
     public void setOnViewportClickListener(OnViewportClickListener listener) {
