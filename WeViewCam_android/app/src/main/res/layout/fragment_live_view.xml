@@ -182,55 +182,52 @@
             android:layout_weight="1"
             android:background="@color/black">
 
-        <!-- 2x2 Grid (Default) -->
-        <LinearLayout
+        <!-- 4-Viewport Container (Portrait: 1-column vertical list, Landscape: 2x2 grid) -->
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:id="@+id/grid_layout_4"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:layout_height="match_parent">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                android:id="@+id/viewport_0"
+                android:layout_width="0dp"
                 android:layout_height="0dp"
-                android:layout_weight="1"
-                android:orientation="horizontal">
+                android:layout_margin="1dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toTopOf="@id/viewport_1"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
 
-                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
-                    android:id="@+id/viewport_0"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:layout_margin="1dp" />
-
-                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
-                    android:id="@+id/viewport_1"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:layout_margin="1dp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
+            <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                android:id="@+id/viewport_1"
+                android:layout_width="0dp"
                 android:layout_height="0dp"
-                android:layout_weight="1"
-                android:orientation="horizontal">
+                android:layout_margin="1dp"
+                app:layout_constraintTop_toBottomOf="@id/viewport_0"
+                app:layout_constraintBottom_toTopOf="@id/viewport_2"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
 
-                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
-                    android:id="@+id/viewport_2"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:layout_margin="1dp" />
+            <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                android:id="@+id/viewport_2"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_margin="1dp"
+                app:layout_constraintTop_toBottomOf="@id/viewport_1"
+                app:layout_constraintBottom_toTopOf="@id/viewport_3"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
 
-                <com.weviewcam.client.ui.view.SurveillanceSurfaceView
-                    android:id="@+id/viewport_3"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:layout_margin="1dp" />
-            </LinearLayout>
-        </LinearLayout>
+            <com.weviewcam.client.ui.view.SurveillanceSurfaceView
+                android:id="@+id/viewport_3"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_margin="1dp"
+                app:layout_constraintTop_toBottomOf="@id/viewport_2"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
         <!-- 1x1 Single View (Hidden by default, shown when 1-split or double-tapped) -->
         <com.weviewcam.client.ui.view.SurveillanceSurfaceView

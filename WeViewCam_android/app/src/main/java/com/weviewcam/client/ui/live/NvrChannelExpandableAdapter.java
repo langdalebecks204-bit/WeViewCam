@@ -19,6 +19,7 @@ public class NvrChannelExpandableAdapter extends BaseExpandableListAdapter {
 
     public interface OnChannelSelectedListener {
         void onChannelSelected(DeviceInfo device, ChannelInfo channel);
+        default void onChannelLongClicked(DeviceInfo device, ChannelInfo channel) {}
     }
 
     private final Context context;
@@ -44,7 +45,7 @@ public class NvrChannelExpandableAdapter extends BaseExpandableListAdapter {
     @Override
     public int getChildrenCount(int groupPosition) {
         DeviceInfo dev = devices.get(groupPosition);
-        return (dev.getChannels() != null) ? dev.getChannels().size() : 0;
+        return dev.getEnabledChannels().size();
     }
 
     @Override
@@ -55,7 +56,7 @@ public class NvrChannelExpandableAdapter extends BaseExpandableListAdapter {
     @Override
     public Object getChild(int groupPosition, int childPosition) {
         DeviceInfo dev = devices.get(groupPosition);
-        return dev.getChannels().get(childPosition);
+        return dev.getEnabledChannels().get(childPosition);
     }
 
     @Override
@@ -89,12 +90,11 @@ public class NvrChannelExpandableAdapter extends BaseExpandableListAdapter {
         tvNvrName.setText(name);
         tvNvrIp.setText(dev.getIp() + ":" + dev.getPort());
 
-        int total = (dev.getChannels() != null) ? dev.getChannels().size() : 0;
+        List<ChannelInfo> enabledChannels = dev.getEnabledChannels();
+        int total = enabledChannels.size();
         int online = 0;
-        if (dev.getChannels() != null) {
-            for (ChannelInfo ch : dev.getChannels()) {
-                if (ch.isOnline()) online++;
-            }
+        for (ChannelInfo ch : enabledChannels) {
+            if (ch.isOnline()) online++;
         }
         tvChannelCount.setText(online + "/" + total + " 在线");
         tvExpandArrow.setText(isExpanded ? "▲" : "▼");
@@ -109,7 +109,7 @@ public class NvrChannelExpandableAdapter extends BaseExpandableListAdapter {
         }
 
         DeviceInfo dev = devices.get(groupPosition);
-        ChannelInfo ch = dev.getChannels().get(childPosition);
+        ChannelInfo ch = dev.getEnabledChannels().get(childPosition);
 
         View statusDot = convertView.findViewById(R.id.view_status_dot);
         TextView tvChannelName = convertView.findViewById(R.id.tv_channel_name);
@@ -140,6 +140,14 @@ public class NvrChannelExpandableAdapter extends BaseExpandableListAdapter {
             if (listener != null) {
                 listener.onChannelSelected(dev, ch);
             }
+        });
+
+        convertView.setOnLongClickListener(v -> {
+            if (listener != null) {
+                listener.onChannelLongClicked(dev, ch);
+                return true;
+            }
+            return false;
         });
 
         return convertView;

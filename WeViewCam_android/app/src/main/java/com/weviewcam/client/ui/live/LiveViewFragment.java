@@ -9,6 +9,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ExpandableListView;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
@@ -18,6 +19,8 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.constraintlayout.widget.ConstraintSet;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
@@ -244,7 +247,7 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
 
         List<DeviceInfo> validDevices = new ArrayList<>();
         for (DeviceInfo d : devices) {
-            if (d.getChannels() != null && !d.getChannels().isEmpty()) {
+            if (d.getEnabledChannels() != null && !d.getEnabledChannels().isEmpty()) {
                 validDevices.add(d);
             }
         }
@@ -261,11 +264,25 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
                     requireContext(),
                     validDevices,
                     currentCh,
-                    (device, chosenChannel) -> {
-                        dialog.dismiss();
-                        selectViewport(vp);
-                        startPlayOnViewport(vp, chosenChannel);
-                        Toast.makeText(getContext(), vpTitle + " 已切换到: " + device.getName() + " - " + chosenChannel.getName(), Toast.LENGTH_SHORT).show();
+                    new NvrChannelExpandableAdapter.OnChannelSelectedListener() {
+                        @Override
+                        public void onChannelSelected(DeviceInfo device, ChannelInfo chosenChannel) {
+                            dialog.dismiss();
+                            selectViewport(vp);
+                            startPlayOnViewport(vp, chosenChannel);
+                            Toast.makeText(getContext(), vpTitle + " 已切换到: " + device.getName() + " - " + chosenChannel.getName(), Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onChannelLongClicked(DeviceInfo device, ChannelInfo channel) {
+                            showQuickRenameDialog(device, channel, () -> {
+                                if (vp.getChannelInfo() != null && vp.getChannelInfo().getChannelNo() == channel.getChannelNo()
+                                        && device.getDeviceId().equals(vp.getChannelInfo().getDeviceId())) {
+                                    vp.setChannelInfo(channel);
+                                }
+                                updateChannelSelectButton(activeViewport != null ? activeViewport.getChannelInfo() : null);
+                            });
+                        }
                     }
             );
             elvTree.setAdapter(adapter);
@@ -279,18 +296,48 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
                 }
             });
 
-            // Auto-expand only the device containing the currently active channel, otherwise keep all collapsed
-            if (currentCh != null && currentCh.getDeviceId() != null) {
-                for (int i = 0; i < validDevices.size(); i++) {
-                    if (currentCh.getDeviceId().equals(validDevices.get(i).getDeviceId())) {
-                        elvTree.expandGroup(i);
-                        break;
-                    }
-                }
-            }
+            // Keep all devices collapsed by default; channels only expand when a device is tapped
         }
 
         btnClose.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+    }
+
+    private void showQuickRenameDialog(DeviceInfo device, ChannelInfo channel, Runnable onUpdated) {
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_channel_rename, null);
+        TextView tvTitle = dialogView.findViewById(R.id.tv_rename_title);
+        TextView tvChNo = dialogView.findViewById(R.id.tv_rename_channel_no);
+        EditText etName = dialogView.findViewById(R.id.et_channel_new_name);
+        Button btnCancel = dialogView.findViewById(R.id.btn_rename_cancel);
+        Button btnSave = dialogView.findViewById(R.id.btn_rename_save);
+
+        tvTitle.setText("自定义通道名称");
+        tvChNo.setText("所属设备: " + device.getName() + " · 通道 " + channel.getChannelNo());
+        etName.setText(channel.getName());
+        etName.setSelectAllOnFocus(true);
+
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnSave.setOnClickListener(v -> {
+            String newName = etName.getText().toString().trim();
+            if (!newName.isEmpty()) {
+                channel.setName(newName);
+                deviceManager.updateDeviceChannels(device.getDeviceId(), device.getChannels());
+                if (onUpdated != null) {
+                    onUpdated.run();
+                }
+                Toast.makeText(getContext(), "通道名称已更新为: " + newName, Toast.LENGTH_SHORT).show();
+            }
+            dialog.dismiss();
+        });
+
         dialog.show();
     }
 
@@ -476,7 +523,7 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
     private void loadChannels() {
         allChannels.clear();
         for (DeviceInfo dev : deviceManager.getDevices()) {
-            allChannels.addAll(dev.getChannels());
+            allChannels.addAll(dev.getEnabledChannels());
         }
 
         // Assign first 4 channels to viewports WITHOUT auto-playing video
@@ -652,11 +699,22 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
 
     private void updateOrientationLayout(int orientation) {
         if (layoutLiveBody == null || videoContainer == null) return;
+        boolean isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
+
+        // Switch 4-split arrangement: 1-column vertical list in portrait, 2x2 grid (田字分屏) in landscape
+        if (gridLayout4 instanceof ConstraintLayout) {
+            ConstraintLayout cl = (ConstraintLayout) gridLayout4;
+            if (isLandscape) {
+                applyLandscape4GridConstraints(cl);
+            } else {
+                applyPortrait4ColumnConstraints(cl);
+            }
+        }
+
         if (getActivity() instanceof MainActivity && ((MainActivity) getActivity()).isFullScreen()) {
             onFullScreenChanged(true);
             return;
         }
-        boolean isLandscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
 
         if (layoutToolbar != null && layoutToolbarRow1 != null && layoutToolbarRow2 != null) {
             if (isLandscape) {
@@ -695,6 +753,93 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
                 layoutPtzPanel.setLayoutParams(ptzParams);
             }
         }
+    }
+
+    private void applyLandscape4GridConstraints(ConstraintLayout cl) {
+        ConstraintSet set = new ConstraintSet();
+        set.clone(cl);
+
+        int[] vps = new int[]{R.id.viewport_0, R.id.viewport_1, R.id.viewport_2, R.id.viewport_3};
+        for (int id : vps) {
+            set.clear(id);
+        }
+
+        int margin = dpToPx(1);
+
+        // Row 0, Col 0: viewport_0
+        set.connect(R.id.viewport_0, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_0, ConstraintSet.BOTTOM, R.id.viewport_2, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_0, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin);
+        set.connect(R.id.viewport_0, ConstraintSet.END, R.id.viewport_1, ConstraintSet.START, margin);
+
+        // Row 0, Col 1: viewport_1
+        set.connect(R.id.viewport_1, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_1, ConstraintSet.BOTTOM, R.id.viewport_3, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_1, ConstraintSet.START, R.id.viewport_0, ConstraintSet.END, margin);
+        set.connect(R.id.viewport_1, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin);
+
+        // Row 1, Col 0: viewport_2
+        set.connect(R.id.viewport_2, ConstraintSet.TOP, R.id.viewport_0, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_2, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_2, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin);
+        set.connect(R.id.viewport_2, ConstraintSet.END, R.id.viewport_3, ConstraintSet.START, margin);
+
+        // Row 1, Col 1: viewport_3
+        set.connect(R.id.viewport_3, ConstraintSet.TOP, R.id.viewport_1, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_3, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_3, ConstraintSet.START, R.id.viewport_2, ConstraintSet.END, margin);
+        set.connect(R.id.viewport_3, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin);
+
+        for (int id : vps) {
+            set.constrainWidth(id, ConstraintSet.MATCH_CONSTRAINT);
+            set.constrainHeight(id, ConstraintSet.MATCH_CONSTRAINT);
+            set.setHorizontalWeight(id, 1.0f);
+            set.setVerticalWeight(id, 1.0f);
+        }
+
+        set.applyTo(cl);
+    }
+
+    private void applyPortrait4ColumnConstraints(ConstraintLayout cl) {
+        ConstraintSet set = new ConstraintSet();
+        set.clone(cl);
+
+        int[] vps = new int[]{R.id.viewport_0, R.id.viewport_1, R.id.viewport_2, R.id.viewport_3};
+        for (int id : vps) {
+            set.clear(id);
+        }
+
+        int margin = dpToPx(1);
+
+        // Vertical 1-column list: viewport 0 -> 1 -> 2 -> 3
+        set.connect(R.id.viewport_0, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_0, ConstraintSet.BOTTOM, R.id.viewport_1, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_0, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin);
+        set.connect(R.id.viewport_0, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin);
+
+        set.connect(R.id.viewport_1, ConstraintSet.TOP, R.id.viewport_0, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_1, ConstraintSet.BOTTOM, R.id.viewport_2, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_1, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin);
+        set.connect(R.id.viewport_1, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin);
+
+        set.connect(R.id.viewport_2, ConstraintSet.TOP, R.id.viewport_1, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_2, ConstraintSet.BOTTOM, R.id.viewport_3, ConstraintSet.TOP, margin);
+        set.connect(R.id.viewport_2, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin);
+        set.connect(R.id.viewport_2, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin);
+
+        set.connect(R.id.viewport_3, ConstraintSet.TOP, R.id.viewport_2, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_3, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM, margin);
+        set.connect(R.id.viewport_3, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START, margin);
+        set.connect(R.id.viewport_3, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END, margin);
+
+        for (int id : vps) {
+            set.constrainWidth(id, ConstraintSet.MATCH_CONSTRAINT);
+            set.constrainHeight(id, ConstraintSet.MATCH_CONSTRAINT);
+            set.setHorizontalWeight(id, 1.0f);
+            set.setVerticalWeight(id, 1.0f);
+        }
+
+        set.applyTo(cl);
     }
 
     private void toggleFullScreen() {

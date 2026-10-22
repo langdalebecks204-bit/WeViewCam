@@ -140,6 +140,18 @@ public class DeviceInfo implements Serializable {
         return channels;
     }
 
+    public List<ChannelInfo> getEnabledChannels() {
+        List<ChannelInfo> enabledList = new ArrayList<>();
+        if (channels != null) {
+            for (ChannelInfo ch : channels) {
+                if (ch.isEnabled()) {
+                    enabledList.add(ch);
+                }
+            }
+        }
+        return enabledList;
+    }
+
     public void setChannels(List<ChannelInfo> channels) {
         this.channels = channels;
     }

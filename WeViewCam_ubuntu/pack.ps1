@@ -1,8 +1,8 @@
 # ==============================================================================
-# WeViewCam 一键打包脚本 (Windows PowerShell) - v0.1.1
+# WeViewCam 一键打包脚本 (Windows PowerShell) - v0.1.2
 # ==============================================================================
 
-$version = "0.1.1"
+$version = "0.1.2"
 $output = "weviewcam_ubuntu.tar.gz"
 $versioned_output = "weviewcam_ubuntu_v$version.tar.gz"
 

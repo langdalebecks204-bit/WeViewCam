@@ -22,18 +22,27 @@ public class ChannelInfo implements Serializable {
     @SerializedName(value = "device_id", alternate = {"deviceId"})
     private String deviceId;
 
+    @SerializedName(value = "is_enabled", alternate = {"isEnabled", "enabled"})
+    private boolean enabled = true;
+
     @SerializedName("extra")
     private Map<String, Object> extra = new HashMap<>();
 
     public ChannelInfo() {
+        this.enabled = true;
     }
 
     public ChannelInfo(int channelNo, String name, boolean isOnline, boolean isPtz, String deviceId) {
+        this(channelNo, name, isOnline, isPtz, deviceId, true);
+    }
+
+    public ChannelInfo(int channelNo, String name, boolean isOnline, boolean isPtz, String deviceId, boolean enabled) {
         this.channelNo = channelNo;
         this.name = name;
         this.isOnline = isOnline;
         this.isPtz = isPtz;
         this.deviceId = deviceId;
+        this.enabled = enabled;
     }
 
     public int getChannelNo() {
@@ -74,6 +83,14 @@ public class ChannelInfo implements Serializable {
 
     public void setDeviceId(String deviceId) {
         this.deviceId = deviceId;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
     }
 
     public Map<String, Object> getExtra() {

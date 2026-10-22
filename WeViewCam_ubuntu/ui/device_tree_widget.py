@@ -142,8 +142,9 @@ class DeviceTreeWidget(QWidget):
             dev_item.setIcon(0, icon_online() if dev.is_connected else icon_disconnected())
             ch_summary = ""
             if dev.channels:
-                online_cnt = sum(1 for c in dev.channels if c.is_online)
-                ch_summary = f" [{online_cnt}/{len(dev.channels)} 在线]"
+                enabled_chs = [c for c in dev.channels if getattr(c, "is_enabled", True)]
+                online_cnt = sum(1 for c in enabled_chs if c.is_online)
+                ch_summary = f" [{online_cnt}/{len(enabled_chs)} 在线]"
             dev_item.setText(0, f"[{proto_name}] {dev.name} ({dev.ip}){ch_summary}")
             dev_item.setData(0, Qt.UserRole, {"type": "device", "device_id": dev.device_id})
             dev_item.setExpanded(True)
@@ -159,6 +160,8 @@ class DeviceTreeWidget(QWidget):
 
             if channels:
                 for ch in channels:
+                    if not getattr(ch, "is_enabled", True):
+                        continue
                     ch_item = QTreeWidgetItem(dev_item)
                     if ch.is_online:
                         ch_item.setIcon(0, icon_online())
@@ -241,6 +244,10 @@ class DeviceTreeWidget(QWidget):
                 act_conn.triggered.connect(lambda: self._toggle_connect(device_id, True))
 
             menu.addSeparator()
+            act_channels = menu.addAction("📑 通道管理")
+            act_channels.triggered.connect(lambda: self._open_channel_management(device_id))
+
+            menu.addSeparator()
             act_refresh = menu.addAction("🔄 刷新通道状态")
             act_refresh.triggered.connect(lambda: self._refresh_device_channels(device_id))
 
@@ -259,7 +266,55 @@ class DeviceTreeWidget(QWidget):
                 data["channel_name"]
             ))
 
+            menu.addSeparator()
+            act_rename = menu.addAction("✏️ 重命名此通道")
+            act_rename.triggered.connect(lambda: self._rename_channel_prompt(
+                data["device_id"],
+                data["channel_no"],
+                data["channel_name"]
+            ))
+
+            act_disable = menu.addAction("👁️ 停用此通道")
+            act_disable.triggered.connect(lambda: self._disable_channel(
+                data["device_id"],
+                data["channel_no"],
+                data["channel_name"]
+            ))
+
+            menu.addSeparator()
+            act_manage = menu.addAction("📑 打开通道管理")
+            act_manage.triggered.connect(lambda: self._open_channel_management(data["device_id"]))
+
         menu.exec_(self.tree.mapToGlobal(pos))
+
+    def _open_channel_management(self, device_id: str):
+        from ui.channel_management_dialog import ChannelManagementDialog
+        dlg = ChannelManagementDialog(self.device_manager, device_id, self)
+        dlg.exec_()
+        self.refresh_devices()
+
+    def _rename_channel_prompt(self, device_id: str, channel_no: int, current_name: str):
+        from PyQt5.QtWidgets import QInputDialog
+        new_name, ok = QInputDialog.getText(
+            self,
+            "重命名通道",
+            f"请输入通道 {channel_no} 的自定义显示名称:",
+            text=current_name
+        )
+        if ok and new_name.strip():
+            self.device_manager.update_channel_name(device_id, channel_no, new_name.strip())
+            self.refresh_devices()
+
+    def _disable_channel(self, device_id: str, channel_no: int, channel_name: str):
+        reply = QMessageBox.question(
+            self,
+            "停用通道确认",
+            f"确定要停用通道 [{channel_name}] (CH {channel_no}) 吗？\n\n停用后该通道在资源树和预览分屏中将不再显示。\n可随时在【通道管理】中重新启用。",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.device_manager.set_channel_enabled(device_id, channel_no, False)
+            self.refresh_devices()
 
     def _refresh_device_channels(self, device_id: str):
         dev = self.device_manager.get_device(device_id)
@@ -270,7 +325,9 @@ class DeviceTreeWidget(QWidget):
         else:
             adapter = self.device_manager.get_adapter(device_id)
             if adapter:
-                dev.channels = adapter.get_channels()
+                probed = adapter.get_channels()
+                dev.channels = self.device_manager._merge_channels_preserving_custom(dev.channels, probed)
+                self.device_manager.save_devices()
         self.refresh_devices()
 
     def _toggle_connect(self, device_id: str, connect: bool):
@@ -295,10 +352,50 @@ class DeviceTreeWidget(QWidget):
 
     def on_export_clicked(self):
         """Handle export devices action."""
-        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox, QMenu, QApplication
         devices = self.device_manager.list_devices()
         if not devices:
             QMessageBox.information(self, "提示", "当前没有可导出的设备配置")
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("QMenu { background-color: #21262d; border: 1px solid #30363d; color: #c9d1d9; }")
+        act_file = menu.addAction("📁 保存为本地 JSON 文件")
+        act_clip = menu.addAction("📋 复制配置 JSON 到剪贴板")
+        chosen = menu.exec_(self.btn_export.mapToGlobal(self.btn_export.rect().bottomLeft()))
+        if not chosen:
+            return
+
+        if chosen == act_clip:
+            import json
+            data = []
+            for dev in self.device_manager.list_devices():
+                data.append({
+                    "device_id": dev.device_id,
+                    "name": dev.name,
+                    "ip": dev.ip,
+                    "port": dev.port,
+                    "username": dev.username,
+                    "password": dev.password,
+                    "protocol": dev.protocol.value if hasattr(dev.protocol, "value") else str(dev.protocol),
+                    "rtsp_port": dev.rtsp_port,
+                    "channels": [
+                        {
+                            "channel_no": ch.channel_no,
+                            "name": ch.name,
+                            "is_online": ch.is_online,
+                            "is_ptz": ch.is_ptz,
+                            "is_enabled": getattr(ch, "is_enabled", True),
+                            "device_id": dev.device_id,
+                            "extra": ch.extra
+                        }
+                        for ch in dev.channels
+                    ],
+                    "extra": dev.extra
+                })
+            json_str = json.dumps(data, ensure_ascii=False, indent=2)
+            QApplication.clipboard().setText(json_str)
+            QMessageBox.information(self, "复制成功", f"已成功将 {len(devices)} 台设备配置复制到剪贴板！\n可直接粘贴到微信/邮件/文本文件，或发送至 Android 客户端。")
             return
 
         file_path, _ = QFileDialog.getSaveFileName(
@@ -318,7 +415,19 @@ class DeviceTreeWidget(QWidget):
 
     def on_import_clicked(self):
         """Handle import devices action."""
-        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox, QMenu
+        menu = QMenu(self)
+        menu.setStyleSheet("QMenu { background-color: #21262d; border: 1px solid #30363d; color: #c9d1d9; }")
+        act_file = menu.addAction("📁 选择本地备份文件 (.json)")
+        act_clip = menu.addAction("📋 从剪贴板粘贴配置导入")
+        chosen = menu.exec_(self.btn_import.mapToGlobal(self.btn_import.rect().bottomLeft()))
+        if not chosen:
+            return
+
+        if chosen == act_clip:
+            self.on_paste_import_clicked()
+            return
+
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "选择要导入的设备配置备份",
@@ -351,5 +460,46 @@ class DeviceTreeWidget(QWidget):
             self.refresh_devices()
             QMessageBox.information(self, "导入完成", f"{message}\n设备列表已自动刷新。")
         else:
-            QMessageBox.warning(self, "导入失败", message)
+            QMessageBox.warning(self, "导入提示", message)
+
+    def on_paste_import_clicked(self):
+        """Import configuration directly from clipboard."""
+        from PyQt5.QtWidgets import QApplication, QMessageBox, QInputDialog
+        clipboard = QApplication.clipboard()
+        text = clipboard.text().strip()
+        if not text:
+            text, ok = QInputDialog.getMultiLineText(
+                self,
+                "从剪贴板粘贴配置",
+                "剪贴板为空，请将 JSON 备份配置直接粘贴到下方输入框中:",
+                ""
+            )
+            if not ok or not text.strip():
+                return
+            text = text.strip()
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("选择导入模式")
+        msg_box.setText("已读取到配置文本，请选择导入模式：")
+        msg_box.setInformativeText(
+            "【增量合并】：若已存在相同设备则更新覆盖，新设备自动追加（推荐）。\n"
+            "【完全覆盖】：清空当前所有设备，完全替换为配置内容。"
+        )
+        btn_merge = msg_box.addButton("增量合并", QMessageBox.ActionRole)
+        btn_overwrite = msg_box.addButton("完全覆盖", QMessageBox.DestructiveRole)
+        btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
+        msg_box.setDefaultButton(btn_merge)
+
+        msg_box.exec_()
+        clicked = msg_box.clickedButton()
+        if clicked == btn_cancel:
+            return
+
+        is_overwrite = (clicked == btn_overwrite)
+        success, message, count = self.device_manager.import_devices_from_text(text, overwrite=is_overwrite)
+        if success:
+            self.refresh_devices()
+            QMessageBox.information(self, "导入完成", f"{message}\n设备列表已自动刷新。")
+        else:
+            QMessageBox.warning(self, "导入提示", message)
 

@@ -7,7 +7,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VERSION="0.1.1"
+VERSION="0.1.2"
 OUTPUT_NAME="weviewcam_ubuntu.tar.gz"
 VERSIONED_NAME="weviewcam_ubuntu_v${VERSION}.tar.gz"
 

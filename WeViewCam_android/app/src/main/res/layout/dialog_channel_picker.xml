@@ -33,10 +33,18 @@
             android:textStyle="bold" />
     </LinearLayout>
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="提示：未启用的通道不在此显示；长按通道可快速重命名"
+        android:textColor="@color/text_secondary"
+        android:textSize="11sp" />
+
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="6dp"
         android:layout_marginBottom="8dp"
         android:background="@color/surveillance_border" />
 

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@color/surveillance_card_alt"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
+    android:layout_marginBottom="6dp">
+
+    <!-- Channel No Tag -->
+    <TextView
+        android:id="@+id/tv_manage_channel_no"
+        android:layout_width="52dp"
+        android:layout_height="28dp"
+        android:gravity="center"
+        android:text="CH 1"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:background="@drawable/bg_control_button" />
+
+    <!-- Channel info: name and status -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="6dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_manage_channel_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="主大门球机"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="2dp">
+
+            <View
+                android:id="@+id/view_manage_status_dot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="@drawable/bg_status_dot_green" />
+
+            <TextView
+                android:id="@+id/tv_manage_channel_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="在线"
+                android:textColor="@color/status_green"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Rename Button -->
+    <Button
+        android:id="@+id/btn_manage_rename"
+        android:layout_width="wrap_content"
+        android:layout_height="30dp"
+        android:text="改名"
+        android:textSize="11sp"
+        android:layout_marginEnd="8dp"
+        style="@style/SurveillanceButton" />
+
+    <!-- Enabled Switch -->
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/switch_channel_enabled"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="启用"
+        android:textColor="@color/text_primary"
+        android:textSize="12sp" />
+
+</LinearLayout>

@@ -173,6 +173,7 @@ class DeviceDialog(QDialog):
         elif "custom_rtsp_url" in extra:
             del extra["custom_rtsp_url"]
 
+        channels = list(self.device_info.channels) if (self.is_edit and self.device_info) else []
         return DeviceInfo(
             device_id=dev_id,
             name=name,
@@ -181,6 +182,7 @@ class DeviceDialog(QDialog):
             username=self.edit_user.text().strip(),
             password=self.edit_pwd.text().strip(),
             protocol=proto,
+            channels=channels,
             extra=extra
         )
 

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_dialog_rounded"
+    android:padding="16dp">
+
+    <!-- Dialog Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_manage_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="NVR 通道配置与管理"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_manage_close"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:text="✕"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary"
+            style="@style/SurveillanceButton" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_manage_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="设备: 海康威视演示设备 (192.168.1.64)"
+        android:textColor="@color/primary_light"
+        android:textSize="12sp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="提示：未启用的通道在实时预览展开时不显示；支持自定义修改通道名称。"
+        android:textColor="@color/text_secondary"
+        android:textSize="11sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@color/surveillance_border" />
+
+    <!-- Summary & Batch Operation Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/tv_manage_count_summary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="共 0 个通道 · 已启用 0 个"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btn_batch_enable_all"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:text="全选启用"
+            android:textSize="11sp"
+            android:layout_marginEnd="6dp"
+            style="@style/SurveillanceButton" />
+
+        <Button
+            android:id="@+id/btn_batch_disable_all"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:text="全选停用"
+            android:textSize="11sp"
+            android:layout_marginEnd="6dp"
+            style="@style/SurveillanceButton" />
+
+        <Button
+            android:id="@+id/btn_manage_add_channel"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:text="+ 添加"
+            android:textSize="11sp"
+            style="@style/SurveillanceButton" />
+    </LinearLayout>
+
+    <!-- Channel List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_manage_channels"
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:scrollbars="vertical" />
+
+    <!-- Empty Notice -->
+    <TextView
+        android:id="@+id/tv_manage_empty"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:gravity="center"
+        android:text="暂无通道信息\n可点击上方【+ 添加】手动添加通道，或在设备卡片点击【测试连接】自动探测通道"
+        android:textColor="@color/text_muted"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="12dp"
+        android:background="@color/surveillance_border" />
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btn_manage_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="取消"
+            android:textSize="13sp"
+            android:layout_marginEnd="8dp"
+            style="@style/SurveillanceButton" />
+
+        <Button
+            android:id="@+id/btn_manage_save"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="保存生效"
+            android:textSize="13sp"
+            style="@style/SurveillanceAccentButton" />
+    </LinearLayout>
+
+</LinearLayout>

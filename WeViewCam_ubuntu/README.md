@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/GUI-PyQt5-41CD52?logo=qt" alt="PyQt5">
     <img src="https://img.shields.io/badge/Video-LibVLC%20%7C%20OpenCV-FF5722" alt="Video Engines">
     <img src="https://img.shields.io/badge/SDK-Hikvision%20%26%20ONVIF-brightgreen" alt="Supported SDKs">
-    <img src="https://img.shields.io/badge/Release-v0.1.1-orange" alt="Release">
+    <img src="https://img.shields.io/badge/Release-v0.1.2-orange" alt="Release">
   </p>
 </div>
 
@@ -52,11 +52,15 @@ The system adopts a decoupled, modular architecture:
    - Custom high-precision 24-hour interactive timeline with visual recording segments.
    - Mouse wheel zoom (24h -> 12h -> 4h -> 1h scale) and draggable playhead.
    - Comprehensive playback controls: Play, Pause, Fast-forward (2x/4x/8x/16x), Slow-motion (1/2x, 1/4x), and single-frame stepping.
-4. **Device Management**:
+4. **Device & Channel Management**:
+   - Custom channel names and in-place renaming via right-click or dedicated dialog.
+   - Selective channel enable/disable switch (disabled channels hidden from tree and live views).
+   - Dedicated Channel Management Dialog with batch enable/disable and manual channel addition.
+   - Full JSON backup export/import preserving custom channel names and enabled states, with 100% mutual compatibility with the Android client.
    - Add, edit, remove devices with local persistent storage in `config/devices.json`.
-   - One-click "Test Connection" with automatic channel count detection.
+   - One-click "Test Connection" with automatic channel count detection and name preservation.
 5. **Ubuntu Desktop Experience**:
-   - Ready-to-use standalone release tarball (`weviewcam_ubuntu_v0.1.1.tar.gz`).
+   - Ready-to-use standalone release tarball (`weviewcam_ubuntu_v0.1.2.tar.gz`).
    - One-click installer `install.sh` for dependencies and desktop shortcut generation.
    - Auto-configures Python virtual environments and resolves Linux Chinese input method (IBus / Fcitx) integration.
 
@@ -102,7 +106,7 @@ WeViewCam/
 │   ├── test_device_manager.py
 │   ├── test_onvif.py
 │   └── test_timeline.py
-├── weviewcam_ubuntu_v0.1.1.tar.gz       # Standalone Ubuntu release package
+├── weviewcam_ubuntu_v0.1.2.tar.gz       # Standalone Ubuntu release package
 ├── requirements.txt                     # Python dependencies
 ├── install.sh                           # One-click installation & desktop shortcut creator
 ├── setup_env.sh                         # Environment initialization & venv builder
@@ -120,10 +124,10 @@ WeViewCam/
 
 #### Option A: Quick Run with Release Package
 
-1. Download or locate `weviewcam_ubuntu_v0.1.1.tar.gz`.
+1. Download or locate `weviewcam_ubuntu_v0.1.2.tar.gz`.
 2. Extract the archive:
    ```bash
-   tar -xzvf weviewcam_ubuntu_v0.1.1.tar.gz
+   tar -xzvf weviewcam_ubuntu_v0.1.2.tar.gz
    cd WeViewCam
    ```
 3. Run the one-click installer:
@@ -201,12 +205,14 @@ python3 -m pytest tests/ -v
    - 按设备、通道、日期精确检索 NVR / SD 卡历史录像；
    - 自绘高精度 **24 小时交互式时间轴**：绿色高亮录像区间、滚轮无级缩放（24h/12h/4h/1h）、拖拽红色指针精确定位；
    - 完整播控支持：播放、暂停、快进 (2x/4x/8x/16x)、慢放 (1/2x, 1/4x)、单帧步进、截图保存。
-4. **设备管理中心**：
+4. **设备与通道管理中心**：
+   - 支持自定义通道名称与原位重命名，支持 NVR 任意通道自由开启/停用；
+   - 提供专属【通道管理】弹窗，支持批量启用/停用、手动增删通道；
    - 设备增删改查，配置持久化保存在 `config/devices.json`；
-   - 支持跨平台配置一键备份与还原，格式与 Android 客户端完全互通；
+   - 支持跨平台配置一键备份与还原（包含自定义通道名与启用状态），格式与 Android 客户端 100% 互通；
    - 一键“测试连接”，验证网络连通并自动探测通道总数。
 5. **开箱即用的安装包与自动化脚本**：
-   - 附带精简独立的 Ubuntu 预编译安装包 `weviewcam_ubuntu_v0.1.1.tar.gz`；
+   - 附带精简独立的 Ubuntu 预编译安装包 `weviewcam_ubuntu_v0.1.2.tar.gz`；
    - 提供 `install.sh`、`setup_env.sh` 与 `run.sh` 脚本，全自动配置依赖并生成桌面图标。
 
 ---
@@ -215,10 +221,10 @@ python3 -m pytest tests/ -v
 
 #### 方式一：使用发布安装包直接部署 (推荐)
 
-1. 获取发布安装包 `weviewcam_ubuntu_v0.1.1.tar.gz`。
+1. 获取发布安装包 `weviewcam_ubuntu_v0.1.2.tar.gz`。
 2. 解压安装包：
    ```bash
-   tar -xzvf weviewcam_ubuntu_v0.1.1.tar.gz
+   tar -xzvf weviewcam_ubuntu_v0.1.2.tar.gz
    cd WeViewCam
    ```
 3. 执行一键安装：

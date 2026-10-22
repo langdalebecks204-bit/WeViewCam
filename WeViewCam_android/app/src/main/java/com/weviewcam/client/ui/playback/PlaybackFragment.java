@@ -167,12 +167,10 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
         List<String> labels = new ArrayList<>();
         for (DeviceInfo dev : deviceManager.getDevices()) {
             String devName = (dev.getName() != null && !dev.getName().trim().isEmpty()) ? dev.getName() : "NVR";
-            if (dev.getChannels() != null) {
-                for (ChannelInfo ch : dev.getChannels()) {
-                    allChannels.add(ch);
-                    String status = ch.isOnline() ? " [在线]" : " [离线]";
-                    labels.add(devName + " - " + ch.getName() + status);
-                }
+            for (ChannelInfo ch : dev.getEnabledChannels()) {
+                allChannels.add(ch);
+                String status = ch.isOnline() ? " [在线]" : " [离线]";
+                labels.add(devName + " - " + ch.getName() + status);
             }
         }
 

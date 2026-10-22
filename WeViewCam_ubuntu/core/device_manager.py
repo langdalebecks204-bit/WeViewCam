@@ -34,6 +34,26 @@ class DeviceManager:
         from adapters.factory import create_device_adapter
         return create_device_adapter(device_info)
 
+    @staticmethod
+    def _merge_channels_preserving_custom(existing_channels: List[ChannelInfo], probed_channels: List[ChannelInfo]) -> List[ChannelInfo]:
+        """Merge newly probed channels while strictly preserving user-customized names and enabled status."""
+        if not existing_channels:
+            return probed_channels
+        old_map = {c.channel_no: c for c in existing_channels}
+        merged = []
+        for new_ch in probed_channels:
+            old_ch = old_map.pop(new_ch.channel_no, None)
+            if old_ch:
+                if old_ch.name and old_ch.name.strip():
+                    new_ch.name = old_ch.name
+                new_ch.is_enabled = getattr(old_ch, "is_enabled", True)
+                new_ch.is_ptz = getattr(old_ch, "is_ptz", new_ch.is_ptz)
+            merged.append(new_ch)
+        for rem_ch in old_map.values():
+            merged.append(rem_ch)
+        merged.sort(key=lambda c: c.channel_no)
+        return merged
+
     def add_device(self, device: DeviceInfo, auto_connect: bool = False) -> Tuple[bool, str]:
         """Add a new device and optionally connect."""
         if not device.device_id:
@@ -54,7 +74,8 @@ class DeviceManager:
         if auto_connect:
             if adapter.login():
                 device.is_connected = True
-                device.channels = adapter.get_channels()
+                probed = adapter.get_channels()
+                device.channels = self._merge_channels_preserving_custom(device.channels, probed)
                 logger.info(f"设备 [{device.name}] 连接成功，检测到 {len(device.channels)} 个通道")
             else:
                 logger.warning(f"设备 [{device.name}] 自动连接失败")
@@ -123,7 +144,8 @@ class DeviceManager:
         success = adapter.login()
         if success:
             dev.is_connected = True
-            dev.channels = adapter.get_channels()
+            probed = adapter.get_channels()
+            dev.channels = self._merge_channels_preserving_custom(dev.channels, probed)
             logger.info(f"设备 [{dev.name}] 连接成功，更新通道数: {len(dev.channels)}")
             self.save_devices()
             return True
@@ -131,6 +153,75 @@ class DeviceManager:
             dev.is_connected = False
             logger.error(f"设备 [{dev.name}] 连接登录失败")
             return False
+
+    def update_channel_name(self, device_id: str, channel_no: int, new_name: str) -> bool:
+        """Update a specific channel's display name."""
+        dev = self._devices.get(device_id)
+        if not dev:
+            return False
+        for ch in dev.channels:
+            if ch.channel_no == channel_no:
+                ch.name = new_name.strip()
+                self.save_devices()
+                return True
+        return False
+
+    def set_channel_enabled(self, device_id: str, channel_no: int, enabled: bool) -> bool:
+        """Toggle a specific channel's enabled state."""
+        dev = self._devices.get(device_id)
+        if not dev:
+            return False
+        for ch in dev.channels:
+            if ch.channel_no == channel_no:
+                ch.is_enabled = enabled
+                self.save_devices()
+                return True
+        return False
+
+    def batch_set_channels_enabled(self, device_id: str, enabled: bool) -> bool:
+        """Batch set all channels of a device to enabled or disabled."""
+        dev = self._devices.get(device_id)
+        if not dev:
+            return False
+        for ch in dev.channels:
+            ch.is_enabled = enabled
+        self.save_devices()
+        return True
+
+    def add_custom_channel(self, device_id: str, channel_no: int, name: str, is_ptz: bool = False) -> bool:
+        """Add or update a custom channel for a device."""
+        dev = self._devices.get(device_id)
+        if not dev:
+            return False
+        for ch in dev.channels:
+            if ch.channel_no == channel_no:
+                ch.name = name.strip() or f"通道 {channel_no}"
+                ch.is_enabled = True
+                ch.is_ptz = is_ptz
+                self.save_devices()
+                return True
+
+        new_ch = ChannelInfo(
+            channel_no=channel_no,
+            name=name.strip() or f"通道 {channel_no}",
+            is_online=True,
+            is_ptz=is_ptz,
+            device_id=device_id,
+            is_enabled=True
+        )
+        dev.channels.append(new_ch)
+        dev.channels.sort(key=lambda c: c.channel_no)
+        self.save_devices()
+        return True
+
+    def delete_channel(self, device_id: str, channel_no: int) -> bool:
+        """Delete a channel from device channels list."""
+        dev = self._devices.get(device_id)
+        if not dev:
+            return False
+        dev.channels = [c for c in dev.channels if c.channel_no != channel_no]
+        self.save_devices()
+        return True
 
     def disconnect_device(self, device_id: str) -> bool:
         """Disconnect a device."""
@@ -180,6 +271,7 @@ class DeviceManager:
                         "name": ch.name,
                         "is_online": ch.is_online,
                         "is_ptz": ch.is_ptz,
+                        "is_enabled": getattr(ch, "is_enabled", True),
                         "device_id": dev.device_id,
                         "extra": ch.extra
                     }
@@ -215,6 +307,7 @@ class DeviceManager:
             ch_name = ch.get("name") or f"通道 {ch_no}"
             is_online = ch.get("is_online", ch.get("isOnline", True))
             is_ptz = ch.get("is_ptz", ch.get("isPtz", False))
+            is_enabled = ch.get("is_enabled", ch.get("isEnabled", ch.get("enabled", True)))
             ch_dev_id = ch.get("device_id") or ch.get("deviceId") or device_id
             ch_extra = ch.get("extra") or {}
             normalized_channels.append(ChannelInfo(
@@ -223,6 +316,7 @@ class DeviceManager:
                 is_online=bool(is_online),
                 is_ptz=bool(is_ptz),
                 device_id=ch_dev_id,
+                is_enabled=bool(is_enabled),
                 extra=ch_extra
             ))
 
@@ -267,6 +361,7 @@ class DeviceManager:
                             "name": ch.name,
                             "is_online": ch.is_online,
                             "is_ptz": ch.is_ptz,
+                            "is_enabled": getattr(ch, "is_enabled", True),
                             "device_id": dev.device_id,
                             "extra": ch.extra
                         }
@@ -284,24 +379,73 @@ class DeviceManager:
             return False
 
     def import_devices(self, source_path: str, overwrite: bool = False) -> Tuple[bool, str, int]:
-        """Import devices from a backup JSON file."""
+        """Import devices from a backup JSON file with robust empty/BOM/encoding checks."""
         if not os.path.exists(source_path):
             return False, f"文件不存在: {source_path}", 0
 
         try:
-            with open(source_path, "r", encoding="utf-8") as f:
-                content = json.load(f)
+            file_size = os.path.getsize(source_path)
+            if file_size == 0:
+                return False, (
+                    "选择的文件大小为 0 字节 (空文件)。\n\n"
+                    "【排查提示】：\n"
+                    "1. 若此文件通过微信/QQ等传输，请先在聊天窗口点击该文件完成【下载】或【另存为】到电脑（未下载时本地仅为 0 字节占位符）。\n"
+                    "2. 若通过 USB 传输，请确认文件在电脑上已拷贝完整。\n"
+                    "3. 您也可以在 Android 端选择【复制配置到剪贴板】，并在 Ubuntu 端使用【从剪贴板导入】。"
+                ), 0
 
-            if isinstance(content, dict):
-                raw_list = content.get("devices", [])
-            elif isinstance(content, list):
-                raw_list = content
-            else:
-                return False, "无效的配置文件格式，顶层结构必须为列表或包含 devices 的字典", 0
+            with open(source_path, "rb") as f:
+                raw_bytes = f.read()
 
-            if not raw_list:
-                return False, "配置文件中没有检测到任何设备数据", 0
+            return self.import_devices_from_bytes(raw_bytes, overwrite=overwrite)
+        except Exception as e:
+            logger.error(f"导入设备配置文件读取异常: {e}")
+            return False, f"读取备份文件失败: {str(e)}", 0
 
+    def import_devices_from_bytes(self, raw_bytes: bytes, overwrite: bool = False) -> Tuple[bool, str, int]:
+        """Import devices from raw bytes with auto encoding detection (UTF-8, UTF-8-BOM, UTF-16)."""
+        if not raw_bytes or not raw_bytes.strip():
+            return False, "备份文件内容为空 (0 字节)，未读取到有效数据", 0
+
+        # Auto-detect UTF-16 vs UTF-8 BOM vs UTF-8
+        if raw_bytes.startswith(b"\xff\xfe") or raw_bytes.startswith(b"\xfe\xff"):
+            text = raw_bytes.decode("utf-16", errors="replace")
+        else:
+            text = raw_bytes.decode("utf-8-sig", errors="replace")
+
+        return self.import_devices_from_text(text, overwrite=overwrite)
+
+    def import_devices_from_text(self, text: str, overwrite: bool = False) -> Tuple[bool, str, int]:
+        """Import devices directly from JSON string."""
+        if not text:
+            return False, "传入的配置文本为空", 0
+
+        clean_text = text.strip().lstrip("\ufeff\x00 \t\r\n")
+        if not clean_text:
+            return False, "配置文本去除空字符后为空", 0
+
+        try:
+            content = json.loads(clean_text)
+        except json.JSONDecodeError as jde:
+            preview = clean_text[:100] if len(clean_text) > 100 else clean_text
+            logger.error(f"JSON 解析失败 ({jde.msg}, line {jde.lineno}, col {jde.colno}): {preview!r}")
+            return False, (
+                f"备份内容不是合法的 JSON 格式 ({jde.msg}，第{jde.lineno}行第{jde.colno}列)。\n\n"
+                f"文本前缀: {preview!r}\n"
+                f"请核对文件内容是否完整。"
+            ), 0
+
+        if isinstance(content, dict):
+            raw_list = content.get("devices", [])
+        elif isinstance(content, list):
+            raw_list = content
+        else:
+            return False, "无效的配置文件格式，顶层结构必须为列表或包含 devices 的字典", 0
+
+        if not raw_list:
+            return False, "配置文件中没有检测到任何设备数据", 0
+
+        try:
             if overwrite:
                 for dev_id in list(self._devices.keys()):
                     self.remove_device(dev_id)
@@ -335,6 +479,22 @@ class DeviceManager:
 
                 if existing_id:
                     dev_obj.device_id = existing_id
+                    existing_dev = self._devices[existing_id]
+                    if not dev_obj.channels and existing_dev.channels:
+                        dev_obj.channels = existing_dev.channels
+                    elif dev_obj.channels and existing_dev.channels:
+                        backup_map = {c.channel_no: c for c in dev_obj.channels}
+                        for exist_ch in existing_dev.channels:
+                            if exist_ch.channel_no in backup_map:
+                                bak_ch = backup_map.pop(exist_ch.channel_no)
+                                if bak_ch.name and bak_ch.name.strip():
+                                    exist_ch.name = bak_ch.name
+                                exist_ch.is_enabled = bak_ch.is_enabled
+                                exist_ch.is_ptz = bak_ch.is_ptz
+                        for added_ch in backup_map.values():
+                            added_ch.device_id = existing_id
+                            existing_dev.channels.append(added_ch)
+                        dev_obj.channels = existing_dev.channels
                     self.update_device(dev_obj)
                 else:
                     self.add_device(dev_obj)
@@ -345,7 +505,7 @@ class DeviceManager:
             return True, f"成功导入 {imported_count} 台设备配置", imported_count
         except Exception as e:
             logger.error(f"导入设备配置异常: {e}")
-            return False, f"导入失败: {str(e)}", 0
+            return False, f"导入处理失败: {str(e)}", 0
 
     def load_devices(self):
         """Load devices from JSON config file."""

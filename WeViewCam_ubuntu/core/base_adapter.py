@@ -54,6 +54,7 @@ class ChannelInfo:
     is_online: bool = True
     is_ptz: bool = False
     device_id: str = ""
+    is_enabled: bool = True
     extra: Dict[str, Any] = field(default_factory=dict)
 
 

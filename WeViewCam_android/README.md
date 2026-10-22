@@ -129,7 +129,7 @@ WeViewCam_android/
 
 构建生成的 APK 位于：
 - **开发构建输出**：`app/build/outputs/apk/debug/app-debug.apk`
-- **预编译发布安装包**：`weviewcam_android_v0.1.1.apk`
+- **预编译发布安装包**：`weviewcam_android_v0.1.2.apk`
   - 架构支持：`arm64-v8a`、`armeabi-v7a`
 
 ---

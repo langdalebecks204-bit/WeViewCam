@@ -25,7 +25,9 @@ import java.io.OutputStreamWriter;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -161,6 +163,41 @@ public class DeviceManager {
                 if ((newDev.getDeviceId() != null && newDev.getDeviceId().equals(existing.getDeviceId()))
                         || (newDev.getIp() != null && newDev.getIp().equals(existing.getIp()) && newDev.getPort() == existing.getPort())) {
                     newDev.setDeviceId(existing.getDeviceId());
+
+                    if (newDev.getChannels() == null || newDev.getChannels().isEmpty()) {
+                        // Imported device does not contain channel details, preserve existing channels
+                        newDev.setChannels(existing.getChannels());
+                    } else if (existing.getChannels() != null && !existing.getChannels().isEmpty()) {
+                        // Merge backup channel details (custom names, enabled state) into existing device channels
+                        Map<Integer, ChannelInfo> backupChannelMap = new HashMap<>();
+                        for (ChannelInfo ch : newDev.getChannels()) {
+                            ch.setDeviceId(existing.getDeviceId());
+                            backupChannelMap.put(ch.getChannelNo(), ch);
+                        }
+
+                        for (ChannelInfo existCh : existing.getChannels()) {
+                            ChannelInfo bakCh = backupChannelMap.remove(existCh.getChannelNo());
+                            if (bakCh != null) {
+                                if (bakCh.getName() != null && !bakCh.getName().trim().isEmpty()) {
+                                    existCh.setName(bakCh.getName());
+                                }
+                                existCh.setEnabled(bakCh.isEnabled());
+                                existCh.setPtz(bakCh.isPtz());
+                            }
+                        }
+
+                        // Add any new channels declared in backup that were not present locally
+                        for (ChannelInfo addedCh : backupChannelMap.values()) {
+                            existing.getChannels().add(addedCh);
+                        }
+
+                        newDev.setChannels(existing.getChannels());
+                    } else {
+                        for (ChannelInfo ch : newDev.getChannels()) {
+                            ch.setDeviceId(existing.getDeviceId());
+                        }
+                    }
+
                     devices.set(i, newDev);
                     updated = true;
                     count++;
@@ -237,6 +274,24 @@ public class DeviceManager {
                     chs = new ArrayList<>();
                     chs.add(new ChannelInfo(1, "通道 1", true, false, device.getDeviceId()));
                 }
+                
+                // Preserve existing custom names and enabled/disabled preferences
+                Map<Integer, ChannelInfo> existingMap = new HashMap<>();
+                if (device.getChannels() != null) {
+                    for (ChannelInfo oldCh : device.getChannels()) {
+                        existingMap.put(oldCh.getChannelNo(), oldCh);
+                    }
+                }
+                for (ChannelInfo newCh : chs) {
+                    ChannelInfo oldCh = existingMap.get(newCh.getChannelNo());
+                    if (oldCh != null) {
+                        if (oldCh.getName() != null && !oldCh.getName().trim().isEmpty()) {
+                            newCh.setName(oldCh.getName());
+                        }
+                        newCh.setEnabled(oldCh.isEnabled());
+                    }
+                }
+
                 finalChannels.addAll(chs);
                 device.setConnected(true);
                 device.setChannels(finalChannels);
@@ -259,5 +314,14 @@ public class DeviceManager {
                 }
             });
         });
+    }
+
+    public synchronized void updateDeviceChannels(String deviceId, List<ChannelInfo> channels) {
+        DeviceInfo dev = getDevice(deviceId);
+        if (dev != null) {
+            dev.setChannels(channels);
+            updateDevice(dev);
+            saveDevices();
+        }
     }
 }

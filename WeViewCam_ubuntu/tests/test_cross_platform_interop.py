@@ -27,13 +27,15 @@ def test_android_to_ubuntu_to_android_simulation():
             "name": "前台球机",
             "is_online": true,
             "is_ptz": true,
+            "is_enabled": true,
             "device_id": "hik_nvr_hq"
           },
           {
             "channel_no": 2,
-            "name": "机房枪机",
+            "name": "机房枪机(已停用)",
             "is_online": true,
             "is_ptz": false,
+            "is_enabled": false,
             "device_id": "hik_nvr_hq"
           }
         ]
@@ -62,7 +64,10 @@ def test_android_to_ubuntu_to_android_simulation():
         assert dev.name == "总部监控中心"
         assert dev.protocol == ProtocolType.HIKVISION
         assert len(dev.channels) == 2
-        assert dev.channels[0].is_ptz is True
+        assert dev.channels[0].name == "前台球机"
+        assert dev.channels[0].is_enabled is True
+        assert dev.channels[1].name == "机房枪机(已停用)"
+        assert dev.channels[1].is_enabled is False
 
         # 3. Ubuntu exports back out
         assert mgr.export_devices(out_path) is True
@@ -73,6 +78,10 @@ def test_android_to_ubuntu_to_android_simulation():
         assert len(data) == 1
         assert data[0]["device_id"] == "hik_nvr_hq"
         assert data[0]["channels"][0]["channel_no"] == 1
+        assert data[0]["channels"][0]["name"] == "前台球机"
+        assert data[0]["channels"][0]["is_enabled"] is True
+        assert data[0]["channels"][1]["name"] == "机房枪机(已停用)"
+        assert data[0]["channels"][1]["is_enabled"] is False
     finally:
         for p in (in_path, cfg_path, out_path):
             if os.path.exists(p):

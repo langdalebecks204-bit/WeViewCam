@@ -91,6 +91,15 @@
                 style="@style/SurveillanceButton" />
 
             <Button
+                android:id="@+id/btn_device_channels"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:text="通道管理"
+                android:textSize="11sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
                 android:id="@+id/btn_device_edit"
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"

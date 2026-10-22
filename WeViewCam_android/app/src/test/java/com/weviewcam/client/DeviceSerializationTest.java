@@ -113,5 +113,119 @@ public class DeviceSerializationTest {
         Assert.assertEquals("legacy_01", dev.getDeviceId());
         Assert.assertEquals(554, dev.getRtspPort());
         Assert.assertEquals(2, dev.getChannels().get(0).getChannelNo());
+        // Default when omitted in json should be enabled
+        Assert.assertTrue(dev.getChannels().get(0).isEnabled());
+    }
+
+    @Test
+    public void testChannelEnabledAndCustomNameSerialization() {
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        DeviceInfo dev = new DeviceInfo("nvr_01", "8路NVR", "192.168.1.100", 8000, "admin", "123", ProtocolType.HIKVISION);
+        List<ChannelInfo> channels = new ArrayList<>();
+        channels.add(new ChannelInfo(1, "自定义大门通道", true, false, "nvr_01", true));
+        channels.add(new ChannelInfo(2, "通道 2 (已停用)", false, false, "nvr_01", false));
+        channels.add(new ChannelInfo(3, "仓库东侧监控", true, true, "nvr_01", true));
+        dev.setChannels(channels);
+
+        // Verify getEnabledChannels
+        List<ChannelInfo> enabledOnly = dev.getEnabledChannels();
+        Assert.assertEquals(2, enabledOnly.size());
+        Assert.assertEquals("自定义大门通道", enabledOnly.get(0).getName());
+        Assert.assertEquals(1, enabledOnly.get(0).getChannelNo());
+        Assert.assertEquals("仓库东侧监控", enabledOnly.get(1).getName());
+        Assert.assertEquals(3, enabledOnly.get(1).getChannelNo());
+
+        String json = gson.toJson(dev);
+        Assert.assertTrue(json.contains("\"is_enabled\": false"));
+        Assert.assertTrue(json.contains("\"name\": \"自定义大门通道\""));
+
+        DeviceInfo restored = gson.fromJson(json, DeviceInfo.class);
+        Assert.assertEquals(3, restored.getChannels().size());
+        Assert.assertTrue(restored.getChannels().get(0).isEnabled());
+        Assert.assertFalse(restored.getChannels().get(1).isEnabled());
+        Assert.assertTrue(restored.getChannels().get(2).isEnabled());
+        Assert.assertEquals(2, restored.getEnabledChannels().size());
+    }
+
+    @Test
+    public void testBackupChannelMergePreservesCustomNamesAndEnabledState() {
+        // Simulating existing device in DeviceManager
+        DeviceInfo existing = new DeviceInfo("dev_merge", "现有设备", "192.168.1.80", 8000, "admin", "123", ProtocolType.HIKVISION);
+        List<ChannelInfo> existingChannels = new ArrayList<>();
+        existingChannels.add(new ChannelInfo(1, "通道 1", true, false, "dev_merge", true));
+        existingChannels.add(new ChannelInfo(2, "通道 2", true, false, "dev_merge", true));
+        existingChannels.add(new ChannelInfo(3, "通道 3", false, false, "dev_merge", true));
+        existing.setChannels(existingChannels);
+
+        // Backup has renamed channel 1, disabled channel 2, and added custom channel 4
+        String backupJson = "[\n" +
+                "  {\n" +
+                "    \"device_id\": \"dev_merge\",\n" +
+                "    \"name\": \"现有设备 (更新)\",\n" +
+                "    \"ip\": \"192.168.1.80\",\n" +
+                "    \"port\": 8000,\n" +
+                "    \"username\": \"admin\",\n" +
+                "    \"password\": \"123\",\n" +
+                "    \"protocol\": \"hikvision\",\n" +
+                "    \"channels\": [\n" +
+                "      {\n" +
+                "        \"channel_no\": 1,\n" +
+                "        \"name\": \"正门高空全景\",\n" +
+                "        \"is_enabled\": true\n" +
+                "      },\n" +
+                "      {\n" +
+                "        \"channel_no\": 2,\n" +
+                "        \"name\": \"仓库走廊(已禁用)\",\n" +
+                "        \"is_enabled\": false\n" +
+                "      },\n" +
+                "      {\n" +
+                "        \"channel_no\": 4,\n" +
+                "        \"name\": \"新加通道4\",\n" +
+                "        \"is_enabled\": true\n" +
+                "      }\n" +
+                "    ]\n" +
+                "  }\n" +
+                "]";
+
+        Gson gson = new GsonBuilder().create();
+        Type listType = new TypeToken<List<DeviceInfo>>() {}.getType();
+        List<DeviceInfo> importedList = gson.fromJson(backupJson, listType);
+        DeviceInfo newDev = importedList.get(0);
+
+        // Perform merge logic
+        java.util.Map<Integer, ChannelInfo> backupChannelMap = new java.util.HashMap<>();
+        for (ChannelInfo ch : newDev.getChannels()) {
+            ch.setDeviceId(existing.getDeviceId());
+            backupChannelMap.put(ch.getChannelNo(), ch);
+        }
+
+        for (ChannelInfo existCh : existing.getChannels()) {
+            ChannelInfo bakCh = backupChannelMap.remove(existCh.getChannelNo());
+            if (bakCh != null) {
+                if (bakCh.getName() != null && !bakCh.getName().trim().isEmpty()) {
+                    existCh.setName(bakCh.getName());
+                }
+                existCh.setEnabled(bakCh.isEnabled());
+                existCh.setPtz(bakCh.isPtz());
+            }
+        }
+
+        for (ChannelInfo addedCh : backupChannelMap.values()) {
+            existing.getChannels().add(addedCh);
+        }
+
+        Assert.assertEquals(4, existing.getChannels().size());
+        // Channel 1: name updated to 正门高空全景, enabled=true
+        Assert.assertEquals("正门高空全景", existing.getChannels().get(0).getName());
+        Assert.assertTrue(existing.getChannels().get(0).isEnabled());
+        // Channel 2: name updated to 仓库走廊(已禁用), enabled=false
+        Assert.assertEquals("仓库走廊(已禁用)", existing.getChannels().get(1).getName());
+        Assert.assertFalse(existing.getChannels().get(1).isEnabled());
+        // Channel 3: not in backup, preserved intact
+        Assert.assertEquals("通道 3", existing.getChannels().get(2).getName());
+        Assert.assertTrue(existing.getChannels().get(2).isEnabled());
+        // Channel 4: added
+        Assert.assertEquals("新加通道4", existing.getChannels().get(3).getName());
+        Assert.assertTrue(existing.getChannels().get(3).isEnabled());
     }
 }
