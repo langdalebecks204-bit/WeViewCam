@@ -42,6 +42,19 @@ public class MainActivity extends AppCompatActivity {
         bottomDivider = findViewById(R.id.bottom_divider);
         bottomNav = findViewById(R.id.bottom_navigation);
 
+        android.widget.TextView tvVersion = findViewById(R.id.tv_app_version);
+        if (tvVersion != null) {
+            String verText = "v" + getAppVersionName(this);
+            tvVersion.setText(verText);
+            tvVersion.setOnClickListener(v -> {
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("关于 WeViewCam")
+                        .setMessage("WeViewCam 移动监控平台客户端\n版本: " + verText + "\n构建: Android Edition (arm64-v8a / armeabi-v7a)\n支持: 多画面实时预览 / 远程录像回放 / 设备配置备份")
+                        .setPositiveButton("确定", null)
+                        .show();
+            });
+        }
+
         // Pre-initialize DeviceManager
         DeviceManager.getInstance(this);
 
@@ -183,6 +196,15 @@ public class MainActivity extends AppCompatActivity {
             if (!hasAll) {
                 ActivityCompat.requestPermissions(this, permissions, 100);
             }
+        }
+    }
+
+    public static String getAppVersionName(android.content.Context context) {
+        if (context == null) return "0.1.3";
+        try {
+            return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "0.1.3";
         }
     }
 }

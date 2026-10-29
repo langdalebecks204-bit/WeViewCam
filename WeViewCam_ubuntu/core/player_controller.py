@@ -293,20 +293,30 @@ class PlayerController:
         elif slot.is_playback and slot.playback_handle >= 0:
             adapter.refresh_playback(slot.playback_handle, win_id=w_id)
 
-    def reopen_live_play(self, slot_id: int, win_id: Optional[int] = None) -> bool:
+    def reopen_live_play(
+        self,
+        slot_id: int,
+        win_id: Optional[int] = None,
+        stream_type: Optional[int] = None
+    ) -> bool:
         """
         Seamlessly reinitialize live preview stream on slot.
         Used when window geometry changes significantly (maximize/restore/layout switch)
-        to guarantee that the SDK hardware decoder adapts 100% to the new window dimensions.
+        or when switching between main stream and sub stream dynamically.
         """
         slot = self.get_slot_state(slot_id)
         if not slot.is_live or not slot.device_id or slot.channel_no <= 0:
+            if stream_type is not None:
+                slot.stream_type = stream_type
             return False
+
+        if stream_type is not None:
+            slot.stream_type = stream_type
 
         device_id = slot.device_id
         channel_no = slot.channel_no
         channel_name = slot.channel_name
-        stream_type = slot.stream_type
+        active_stream = slot.stream_type
         w_id = win_id if win_id is not None and win_id > 0 else slot.win_id
         if win_id and win_id > 0:
             slot.win_id = win_id
@@ -332,8 +342,8 @@ class PlayerController:
             except Exception as e:
                 logger.warning(f"视口 {slot_id + 1} 停止原流异常: {e}")
 
-        # 2. Restart real play with the new X11 window geometry
-        new_handle = adapter.start_real_play(channel_no, w_id, stream_type)
+        # 2. Restart real play with the target stream type and window handle
+        new_handle = adapter.start_real_play(channel_no, w_id, active_stream)
         if new_handle >= 0:
             slot.play_handle = new_handle
             slot.is_live = True
@@ -346,7 +356,7 @@ class PlayerController:
                 except Exception as e:
                     logger.warning(f"视口 {slot_id + 1} 恢复录像异常: {e}")
 
-            logger.info(f"视口 {slot_id + 1} 已无缝重开流适配新窗口分辨率: handle={new_handle}")
+            logger.info(f"视口 {slot_id + 1} 已无缝切换/重开流 (码流={active_stream}): handle={new_handle}")
             return True
         else:
             slot.play_handle = -1

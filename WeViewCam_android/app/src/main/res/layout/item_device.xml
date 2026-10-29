@@ -86,6 +86,9 @@
                 android:id="@+id/btn_device_test"
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:text="测试连接"
                 android:textSize="11sp"
                 style="@style/SurveillanceButton" />
@@ -95,7 +98,22 @@
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
                 android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:text="通道管理"
+                android:textSize="11sp"
+                style="@style/SurveillanceButton" />
+
+            <Button
+                android:id="@+id/btn_device_backup"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="备份"
                 android:textSize="11sp"
                 style="@style/SurveillanceButton" />
 
@@ -104,6 +122,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
                 android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:text="编辑"
                 android:textSize="11sp"
                 style="@style/SurveillanceButton" />
@@ -113,6 +134,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
                 android:layout_marginStart="6dp"
+                android:minWidth="0dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:text="删除"
                 android:textSize="11sp"
                 style="@style/SurveillanceButton" />

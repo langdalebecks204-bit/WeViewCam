@@ -335,4 +335,57 @@ def test_import_robustness_bom_and_empty_files():
             os.remove(tmp_cfg)
 
 
+def test_selective_device_export():
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f_cfg:
+        cfg_path = f_cfg.name
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f_bak:
+        bak_path = f_bak.name
+
+    try:
+        mgr = DeviceManager(config_path=cfg_path)
+        dev1 = DeviceInfo(
+            device_id="dev_01",
+            name="Office 1",
+            ip="192.168.1.101",
+            port=8000,
+            username="admin",
+            password="123",
+            protocol=ProtocolType.HIKVISION,
+            rtsp_port=554,
+            channels=[]
+        )
+        dev2 = DeviceInfo(
+            device_id="dev_02",
+            name="Office 2",
+            ip="192.168.1.102",
+            port=8000,
+            username="admin",
+            password="123",
+            protocol=ProtocolType.HIKVISION,
+            rtsp_port=554,
+            channels=[]
+        )
+        mgr.add_device(dev1)
+        mgr.add_device(dev2)
+
+        # Export only dev_01
+        data1 = mgr.get_devices_export_data(device_ids=["dev_01"])
+        assert len(data1) == 1
+        assert data1[0]["device_id"] == "dev_01"
+
+        # Export file for only dev_02
+        ok = mgr.export_devices(bak_path, device_ids=["dev_02"])
+        assert ok is True
+        with open(bak_path, "r", encoding="utf-8") as f:
+            file_data = json.load(f)
+        assert len(file_data) == 1
+        assert file_data[0]["device_id"] == "dev_02"
+    finally:
+        if os.path.exists(cfg_path):
+            os.remove(cfg_path)
+        if os.path.exists(bak_path):
+            os.remove(bak_path)
+
+
+
 

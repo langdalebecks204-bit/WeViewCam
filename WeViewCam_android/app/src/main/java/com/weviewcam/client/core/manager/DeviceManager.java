@@ -46,6 +46,68 @@ public class DeviceManager {
         void onResult(boolean success, String message, List<ChannelInfo> channels);
     }
 
+    public interface OnDeviceChangeListener {
+        void onDeviceChanged();
+    }
+    private final List<OnDeviceChangeListener> changeListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public void addOnDeviceChangeListener(OnDeviceChangeListener listener) {
+        if (listener != null && !changeListeners.contains(listener)) {
+            changeListeners.add(listener);
+        }
+    }
+
+    public void removeOnDeviceChangeListener(OnDeviceChangeListener listener) {
+        changeListeners.remove(listener);
+    }
+
+    private void notifyDeviceChanged() {
+        mainHandler.post(() -> {
+            for (OnDeviceChangeListener listener : changeListeners) {
+                try {
+                    listener.onDeviceChanged();
+                } catch (Exception ignored) {}
+            }
+        });
+    }
+
+    private final Handler autoRefreshHandler = new Handler(Looper.getMainLooper());
+    private Runnable autoRefreshRunnable;
+    private int refreshIntervalSec = 60; // 0 = disabled
+
+    private void initAutoRefresh() {
+        android.content.SharedPreferences sp = context.getSharedPreferences("weviewcam_prefs", Context.MODE_PRIVATE);
+        refreshIntervalSec = sp.getInt("key_channel_refresh_interval", 60);
+        autoRefreshRunnable = new Runnable() {
+            @Override
+            public void run() {
+                refreshAllDevicesStatus(null);
+                if (refreshIntervalSec > 0) {
+                    autoRefreshHandler.postDelayed(this, refreshIntervalSec * 1000L);
+                }
+            }
+        };
+        applyAutoRefreshInterval();
+    }
+
+    public int getRefreshIntervalSec() {
+        return refreshIntervalSec;
+    }
+
+    public void setRefreshIntervalSec(int sec) {
+        this.refreshIntervalSec = sec;
+        android.content.SharedPreferences sp = context.getSharedPreferences("weviewcam_prefs", Context.MODE_PRIVATE);
+        sp.edit().putInt("key_channel_refresh_interval", sec).apply();
+        applyAutoRefreshInterval();
+    }
+
+    private void applyAutoRefreshInterval() {
+        autoRefreshHandler.removeCallbacks(autoRefreshRunnable);
+        if (refreshIntervalSec > 0) {
+            autoRefreshHandler.postDelayed(autoRefreshRunnable, refreshIntervalSec * 1000L);
+        }
+    }
+
     public static synchronized DeviceManager getInstance(Context context) {
         if (instance == null) {
             instance = new DeviceManager(context.getApplicationContext());
@@ -61,6 +123,9 @@ public class DeviceManager {
         this.context = context;
         this.gson = new GsonBuilder().setPrettyPrinting().create();
         loadDevices();
+        initAutoRefresh();
+        // 启动时自动重新连接所有设备探测最新通道在线状态
+        mainHandler.postDelayed(() -> refreshAllDevicesStatus(null), 800L);
     }
 
     public synchronized List<DeviceInfo> getDevices() {
@@ -118,7 +183,14 @@ public class DeviceManager {
     }
 
     public synchronized String exportDevicesJson() {
-        return gson.toJson(devices);
+        return exportDevicesJson(devices);
+    }
+
+    public synchronized String exportDevicesJson(List<DeviceInfo> targetDevices) {
+        if (targetDevices == null) {
+            return "[]";
+        }
+        return gson.toJson(targetDevices);
     }
 
     public List<DeviceInfo> parseDevicesJson(String jsonString) {
@@ -313,6 +385,74 @@ public class DeviceManager {
                     listener.onResult(loginOk, finalMsg, finalChannels);
                 }
             });
+        });
+    }
+
+    public void refreshAllDevicesStatus(Runnable onComplete) {
+        executor.execute(() -> {
+            List<DeviceInfo> current = getDevices();
+            if (current.isEmpty()) {
+                if (onComplete != null) {
+                    mainHandler.post(onComplete);
+                }
+                return;
+            }
+
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(current.size());
+            for (DeviceInfo dev : current) {
+                executor.execute(() -> {
+                    try {
+                        BaseDeviceAdapter adapter = DeviceAdapterFactory.createAdapter(dev);
+                        boolean ok = adapter.login();
+                        if (ok) {
+                            List<ChannelInfo> chs = adapter.getChannels();
+                            if (chs != null && !chs.isEmpty()) {
+                                Map<Integer, ChannelInfo> existingMap = new HashMap<>();
+                                if (dev.getChannels() != null) {
+                                    for (ChannelInfo oldCh : dev.getChannels()) {
+                                        existingMap.put(oldCh.getChannelNo(), oldCh);
+                                    }
+                                }
+                                for (ChannelInfo newCh : chs) {
+                                    ChannelInfo oldCh = existingMap.get(newCh.getChannelNo());
+                                    if (oldCh != null) {
+                                        if (oldCh.getName() != null && !oldCh.getName().trim().isEmpty()) {
+                                            newCh.setName(oldCh.getName());
+                                        }
+                                        newCh.setEnabled(oldCh.isEnabled());
+                                    }
+                                }
+                                dev.setChannels(chs);
+                            }
+                            dev.setConnected(true);
+                            adapter.logout();
+                        } else {
+                            dev.setConnected(false);
+                            if (dev.getChannels() != null) {
+                                for (ChannelInfo ch : dev.getChannels()) {
+                                    ch.setOnline(false);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        AppLogger.e(MODULE, "刷新设备状态异常: " + dev.getName() + ", " + e.getMessage());
+                        dev.setConnected(false);
+                    } finally {
+                        latch.countDown();
+                    }
+                });
+            }
+
+            try {
+                latch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {}
+
+            saveDevices();
+            notifyDeviceChanged();
+
+            if (onComplete != null) {
+                mainHandler.post(onComplete);
+            }
         });
     }
 

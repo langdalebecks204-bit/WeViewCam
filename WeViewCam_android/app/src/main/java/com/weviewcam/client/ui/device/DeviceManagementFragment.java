@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.weviewcam.client.R;
 import com.weviewcam.client.core.manager.DeviceManager;
 import com.weviewcam.client.core.model.DeviceInfo;
+import com.weviewcam.client.ui.MainActivity;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -35,6 +36,8 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -44,6 +47,7 @@ public class DeviceManagementFragment extends Fragment {
     private DeviceAdapter adapter;
     private DeviceManager deviceManager;
     private final List<DeviceInfo> deviceList = new ArrayList<>();
+    private List<DeviceInfo> pendingExportDevices = null;
 
     private ActivityResultLauncher<String> exportDocumentLauncher;
     private ActivityResultLauncher<String[]> importDocumentLauncher;
@@ -77,6 +81,9 @@ public class DeviceManagementFragment extends Fragment {
         return inflater.inflate(R.layout.fragment_device_management, container, false);
     }
 
+    private Button btnAutoRefresh;
+    private final DeviceManager.OnDeviceChangeListener deviceChangeListener = this::loadDevices;
+
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
@@ -87,8 +94,19 @@ public class DeviceManagementFragment extends Fragment {
         adapter = new DeviceAdapter();
         recyclerView.setAdapter(adapter);
 
+        TextView tvTitle = view.findViewById(R.id.tv_device_center_title);
+        if (tvTitle != null) {
+            tvTitle.setText("监控设备管理中心 (v" + MainActivity.getAppVersionName(requireContext()) + ")");
+        }
+
         Button btnAdd = view.findViewById(R.id.btn_add_device);
         btnAdd.setOnClickListener(v -> showAddDeviceDialog());
+
+        btnAutoRefresh = view.findViewById(R.id.btn_auto_refresh);
+        if (btnAutoRefresh != null) {
+            updateAutoRefreshBtnText();
+            btnAutoRefresh.setOnClickListener(v -> showAutoRefreshSettingsDialog());
+        }
 
         Button btnBackup = view.findViewById(R.id.btn_backup_devices);
         if (btnBackup != null) {
@@ -100,7 +118,59 @@ public class DeviceManagementFragment extends Fragment {
             btnImport.setOnClickListener(v -> importDocumentLauncher.launch(new String[]{"application/json", "text/*", "*/*"}));
         }
 
+        deviceManager.addOnDeviceChangeListener(deviceChangeListener);
         loadDevices();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (deviceManager != null) {
+            deviceManager.removeOnDeviceChangeListener(deviceChangeListener);
+        }
+    }
+
+    private void updateAutoRefreshBtnText() {
+        if (btnAutoRefresh == null || deviceManager == null) return;
+        int sec = deviceManager.getRefreshIntervalSec();
+        if (sec <= 0) {
+            btnAutoRefresh.setText("⏱️ 定时: 关");
+        } else {
+            btnAutoRefresh.setText("⏱️ 定时: " + sec + "s");
+        }
+    }
+
+    private void showAutoRefreshSettingsDialog() {
+        int currentSec = deviceManager.getRefreshIntervalSec();
+        final int[] intervals = new int[]{0, 30, 60, 120, 300, -1};
+        String[] options = new String[]{
+                (currentSec == 0 ? "● " : "○ ") + "禁用 (仅手动刷新)",
+                (currentSec == 30 ? "● " : "○ ") + "每 30 秒自动刷新",
+                (currentSec == 60 ? "● " : "○ ") + "每 60 秒自动刷新 (默认)",
+                (currentSec == 120 ? "● " : "○ ") + "每 2 分钟自动刷新",
+                (currentSec == 300 ? "● " : "○ ") + "每 5 分钟自动刷新",
+                "🔄 立即刷新所有设备通道状态"
+        };
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("定时更新通道在线状态设置")
+                .setItems(options, (dialog, which) -> {
+                    int chosen = intervals[which];
+                    if (chosen == -1) {
+                        Toast.makeText(getContext(), "正在全网探测刷新所有设备通道状态...", Toast.LENGTH_SHORT).show();
+                        deviceManager.refreshAllDevicesStatus(() -> {
+                            loadDevices();
+                            Toast.makeText(getContext(), "设备与通道状态已刷新完成", Toast.LENGTH_SHORT).show();
+                        });
+                    } else {
+                        deviceManager.setRefreshIntervalSec(chosen);
+                        updateAutoRefreshBtnText();
+                        String msg = chosen == 0 ? "已关闭定时刷新通道状态" : ("已设置定时刷新通道状态: 每 " + chosen + " 秒");
+                        Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("关闭", null)
+                .show();
     }
 
     private void showBackupOptionsDialog() {
@@ -109,32 +179,102 @@ public class DeviceManagementFragment extends Fragment {
             return;
         }
 
+        int size = deviceList.size();
+        String[] deviceNames = new String[size];
+        final boolean[] checkedItems = new boolean[size];
+        for (int i = 0; i < size; i++) {
+            DeviceInfo d = deviceList.get(i);
+            deviceNames[i] = d.getName() + " (" + d.getIp() + " | " + d.getChannels().size() + "通道)";
+            checkedItems[i] = true;
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setTitle("选择要备份导出的设备")
+                .setMultiChoiceItems(deviceNames, checkedItems, (d, which, isChecked) -> checkedItems[which] = isChecked)
+                .setPositiveButton("下一步", null)
+                .setNeutralButton("全选/反选", null)
+                .setNegativeButton("取消", null)
+                .create();
+
+        dialog.setOnShowListener(dInterface -> {
+            Button btnPositive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            btnPositive.setOnClickListener(v -> {
+                List<DeviceInfo> selected = new ArrayList<>();
+                for (int i = 0; i < checkedItems.length; i++) {
+                    if (checkedItems[i]) {
+                        selected.add(deviceList.get(i));
+                    }
+                }
+                if (selected.isEmpty()) {
+                    Toast.makeText(getContext(), "请至少选择一台需要导出的设备！", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                dialog.dismiss();
+                showBackupTargetOptionsDialog(selected);
+            });
+
+            Button btnNeutral = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            btnNeutral.setOnClickListener(v -> {
+                boolean allChecked = true;
+                for (boolean b : checkedItems) {
+                    if (!b) {
+                        allChecked = false;
+                        break;
+                    }
+                }
+                boolean newState = !allChecked;
+                for (int i = 0; i < checkedItems.length; i++) {
+                    checkedItems[i] = newState;
+                    dialog.getListView().setItemChecked(i, newState);
+                }
+            });
+        });
+
+        dialog.show();
+    }
+
+    private void showBackupTargetOptionsDialog(List<DeviceInfo> targetDevices) {
+        if (targetDevices == null || targetDevices.isEmpty()) {
+            return;
+        }
+
+        String title = targetDevices.size() == 1
+                ? "备份导出设备 [" + targetDevices.get(0).getName() + "]"
+                : "备份导出 (" + targetDevices.size() + " 台设备)";
+
         String[] options = new String[]{"保存为本地备份文件 (.json)", "分享备份文件 (微信/QQ/局域网等)", "复制配置 JSON 到剪贴板"};
         new AlertDialog.Builder(requireContext())
-                .setTitle("导出设备配置备份")
+                .setTitle(title)
                 .setItems(options, (dialog, which) -> {
                     if (which == 0) {
+                        pendingExportDevices = targetDevices;
                         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-                        String fileName = "weviewcam_devices_" + timeStamp + ".json";
+                        String fileName;
+                        if (targetDevices.size() == 1) {
+                            String safeName = targetDevices.get(0).getName().replaceAll("[\\\\/:*?\"<>|\\s]", "_");
+                            fileName = "weviewcam_backup_" + safeName + "_" + timeStamp + ".json";
+                        } else {
+                            fileName = "weviewcam_devices_" + timeStamp + ".json";
+                        }
                         exportDocumentLauncher.launch(fileName);
                     } else if (which == 1) {
-                        shareBackupFile();
+                        shareBackupFile(targetDevices);
                     } else if (which == 2) {
-                        copyBackupToClipboard();
+                        copyBackupToClipboard(targetDevices);
                     }
                 })
                 .setNegativeButton("取消", null)
                 .show();
     }
 
-    private void copyBackupToClipboard() {
+    private void copyBackupToClipboard(List<DeviceInfo> targetDevices) {
         try {
-            String json = deviceManager.exportDevicesJson();
+            String json = deviceManager.exportDevicesJson(targetDevices);
             android.content.ClipboardManager cm = (android.content.ClipboardManager) requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
             if (cm != null) {
                 android.content.ClipData clip = android.content.ClipData.newPlainText("WeViewCam Backup", json);
                 cm.setPrimaryClip(clip);
-                Toast.makeText(getContext(), "已将设备配置 JSON 复制到剪贴板！可以直接发送给电脑", Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(), "已将 " + targetDevices.size() + " 台设备配置 JSON 复制到剪贴板！可以直接发送给电脑", Toast.LENGTH_LONG).show();
             }
         } catch (Exception e) {
             Toast.makeText(getContext(), "复制失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -143,7 +283,8 @@ public class DeviceManagementFragment extends Fragment {
 
     private void writeBackupToUri(Uri uri) {
         try {
-            String json = deviceManager.exportDevicesJson();
+            List<DeviceInfo> target = pendingExportDevices != null ? pendingExportDevices : deviceList;
+            String json = deviceManager.exportDevicesJson(target);
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
             try (OutputStream os = requireContext().getContentResolver().openOutputStream(uri, "rwt")) {
                 if (os == null) {
@@ -157,20 +298,27 @@ public class DeviceManagementFragment extends Fragment {
                     } catch (Exception ignored) {}
                 }
             }
-            Toast.makeText(getContext(), "设备配置备份已成功保存到文件 (大小: " + bytes.length + " 字节)", Toast.LENGTH_LONG).show();
+            Toast.makeText(getContext(), "选定的 " + target.size() + " 台设备配置已成功保存到文件 (大小: " + bytes.length + " 字节)", Toast.LENGTH_LONG).show();
         } catch (Exception e) {
             Toast.makeText(getContext(), "保存备份失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        } finally {
+            pendingExportDevices = null;
         }
     }
 
-    private void shareBackupFile() {
+    private void shareBackupFile(List<DeviceInfo> targetDevices) {
         try {
             File cacheDir = new File(requireContext().getCacheDir(), "backups");
             if (!cacheDir.exists() && !cacheDir.mkdirs()) {
                 throw new IllegalStateException("无法创建临时备份目录");
             }
-            File backupFile = new File(cacheDir, "weviewcam_devices_backup.json");
-            String json = deviceManager.exportDevicesJson();
+            String fileName = "weviewcam_devices_backup.json";
+            if (targetDevices.size() == 1) {
+                String safeName = targetDevices.get(0).getName().replaceAll("[\\\\/:*?\"<>|\\s]", "_");
+                fileName = "weviewcam_backup_" + safeName + ".json";
+            }
+            File backupFile = new File(cacheDir, fileName);
+            String json = deviceManager.exportDevicesJson(targetDevices);
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
             try (FileOutputStream fos = new FileOutputStream(backupFile)) {
                 fos.write(bytes);
@@ -189,7 +337,10 @@ public class DeviceManagementFragment extends Fragment {
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType("application/json");
             shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
-            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "WeViewCam 设备配置备份");
+            String title = targetDevices.size() == 1
+                    ? "WeViewCam 设备配置备份 - " + targetDevices.get(0).getName()
+                    : "WeViewCam 设备配置备份 (" + targetDevices.size() + "台)";
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, title);
             shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(Intent.createChooser(shareIntent, "分享设备配置备份"));
         } catch (Exception e) {
@@ -322,6 +473,7 @@ public class DeviceManagementFragment extends Fragment {
 
             holder.btnTest.setOnClickListener(v -> testConnection(dev));
             holder.btnChannels.setOnClickListener(v -> showChannelManagementDialog(dev));
+            holder.btnBackup.setOnClickListener(v -> showBackupTargetOptionsDialog(Collections.singletonList(dev)));
             holder.btnEdit.setOnClickListener(v -> showEditDeviceDialog(dev));
             holder.btnDelete.setOnClickListener(v -> confirmDeleteDevice(dev));
         }
@@ -333,7 +485,7 @@ public class DeviceManagementFragment extends Fragment {
 
         class ViewHolder extends RecyclerView.ViewHolder {
             TextView tvName, tvProtocol, tvStatus, tvEndpoint, tvChannels;
-            Button btnTest, btnChannels, btnEdit, btnDelete;
+            Button btnTest, btnChannels, btnBackup, btnEdit, btnDelete;
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
@@ -344,6 +496,7 @@ public class DeviceManagementFragment extends Fragment {
                 tvChannels = itemView.findViewById(R.id.tv_device_channels_count);
                 btnTest = itemView.findViewById(R.id.btn_device_test);
                 btnChannels = itemView.findViewById(R.id.btn_device_channels);
+                btnBackup = itemView.findViewById(R.id.btn_device_backup);
                 btnEdit = itemView.findViewById(R.id.btn_device_edit);
                 btnDelete = itemView.findViewById(R.id.btn_device_delete);
             }

@@ -100,14 +100,15 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
         setupViewports();
         setupListeners();
         loadChannels();
+        deviceManager.addOnDeviceChangeListener(deviceChangeListener);
     }
+
+    private final DeviceManager.OnDeviceChangeListener deviceChangeListener = this::loadChannels;
 
     @Override
     public void onResume() {
         super.onResume();
-        if (allChannels.isEmpty()) {
-            loadChannels();
-        }
+        loadChannels();
     }
 
     private void initViews(View root) {
@@ -903,6 +904,9 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        if (deviceManager != null) {
+            deviceManager.removeOnDeviceChangeListener(deviceChangeListener);
+        }
         for (SurveillanceSurfaceView vp : viewports) {
             if (vp != null && vp.getPlayHandle() >= 0) {
                 BaseDeviceAdapter adapter = getAdapterForDevice(vp.getChannelInfo() != null ? vp.getChannelInfo().getDeviceId() : null);

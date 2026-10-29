@@ -16,6 +16,7 @@
         android:background="@color/surveillance_card">
 
         <TextView
+            android:id="@+id/tv_device_center_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -32,6 +33,17 @@
             android:paddingStart="10dp"
             android:paddingEnd="10dp"
             android:text="📥 导入"
+            android:textSize="12sp"
+            style="@style/SurveillanceButton" />
+
+        <Button
+            android:id="@+id/btn_auto_refresh"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="⏱️ 定时"
             android:textSize="12sp"
             style="@style/SurveillanceButton" />
 

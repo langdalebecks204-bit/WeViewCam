@@ -154,6 +154,60 @@ class DeviceManager:
             logger.error(f"设备 [{dev.name}] 连接登录失败")
             return False
 
+    def refresh_device_status(self, device_id: str) -> bool:
+        """Probe and refresh online status for a specific device and its channels."""
+        dev = self._devices.get(device_id)
+        if not dev:
+            return False
+        adapter = self.get_adapter(device_id)
+        if not adapter:
+            return False
+        try:
+            if not adapter.is_connected:
+                login_ok = adapter.login()
+                if login_ok:
+                    dev.is_connected = True
+                    probed = adapter.get_channels()
+                    if probed:
+                        dev.channels = self._merge_channels_preserving_custom(dev.channels, probed)
+                    self.save_devices()
+                    return True
+                else:
+                    dev.is_connected = False
+                    for ch in dev.channels:
+                        ch.is_online = False
+                    self.save_devices()
+                    return False
+            else:
+                probed = adapter.get_channels()
+                if probed:
+                    dev.channels = self._merge_channels_preserving_custom(dev.channels, probed)
+                dev.is_connected = True
+                self.save_devices()
+                return True
+        except Exception as e:
+            logger.warning(f"刷新设备 [{dev.name}] 状态异常: {e}")
+            dev.is_connected = False
+            return False
+
+    def refresh_all_devices_status(self, max_workers: int = 4) -> Dict[str, bool]:
+        """Probe and refresh online status for all configured devices concurrently."""
+        import concurrent.futures
+        dev_ids = list(self._devices.keys())
+        if not dev_ids:
+            return {}
+        results = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(max_workers, len(dev_ids))) as executor:
+            future_to_id = {executor.submit(self.refresh_device_status, dev_id): dev_id for dev_id in dev_ids}
+            for future in concurrent.futures.as_completed(future_to_id):
+                d_id = future_to_id[future]
+                try:
+                    results[d_id] = future.result()
+                except Exception as ex:
+                    logger.warning(f"刷新设备 {d_id} 状态失败: {ex}")
+                    results[d_id] = False
+        return results
+
     def update_channel_name(self, device_id: str, channel_no: int, new_name: str) -> bool:
         """Update a specific channel's display name."""
         dev = self._devices.get(device_id)
@@ -338,38 +392,46 @@ class DeviceManager:
             "extra": extra
         }
 
-    def export_devices(self, target_path: str) -> bool:
-        """Export all configured devices to a JSON backup file."""
+    def get_devices_export_data(self, device_ids: Optional[List[str]] = None) -> List[dict]:
+        """Convert specified (or all) devices into JSON-serializable backup dictionaries."""
+        data = []
+        target_ids = set(device_ids) if device_ids is not None else None
+        for dev in self._devices.values():
+            if target_ids is not None and dev.device_id not in target_ids:
+                continue
+            dev_dict = {
+                "device_id": dev.device_id,
+                "name": dev.name,
+                "ip": dev.ip,
+                "port": dev.port,
+                "username": dev.username,
+                "password": dev.password,
+                "protocol": dev.protocol.value if isinstance(dev.protocol, ProtocolType) else str(dev.protocol),
+                "rtsp_port": dev.rtsp_port,
+                "channels": [
+                    {
+                        "channel_no": ch.channel_no,
+                        "name": ch.name,
+                        "is_online": ch.is_online,
+                        "is_ptz": ch.is_ptz,
+                        "is_enabled": getattr(ch, "is_enabled", True),
+                        "device_id": dev.device_id,
+                        "extra": ch.extra
+                    }
+                    for ch in dev.channels
+                ],
+                "extra": dev.extra
+            }
+            data.append(dev_dict)
+        return data
+
+    def export_devices(self, target_path: str, device_ids: Optional[List[str]] = None) -> bool:
+        """Export specified (or all) configured devices to a JSON backup file."""
         try:
             dir_name = os.path.dirname(target_path)
             if dir_name:
                 os.makedirs(dir_name, exist_ok=True)
-            data = []
-            for dev in self._devices.values():
-                dev_dict = {
-                    "device_id": dev.device_id,
-                    "name": dev.name,
-                    "ip": dev.ip,
-                    "port": dev.port,
-                    "username": dev.username,
-                    "password": dev.password,
-                    "protocol": dev.protocol.value if isinstance(dev.protocol, ProtocolType) else str(dev.protocol),
-                    "rtsp_port": dev.rtsp_port,
-                    "channels": [
-                        {
-                            "channel_no": ch.channel_no,
-                            "name": ch.name,
-                            "is_online": ch.is_online,
-                            "is_ptz": ch.is_ptz,
-                            "is_enabled": getattr(ch, "is_enabled", True),
-                            "device_id": dev.device_id,
-                            "extra": ch.extra
-                        }
-                        for ch in dev.channels
-                    ],
-                    "extra": dev.extra
-                }
-                data.append(dev_dict)
+            data = self.get_devices_export_data(device_ids=device_ids)
             with open(target_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             logger.info(f"已成功导出 {len(data)} 台设备配置到 {target_path}")

@@ -81,6 +81,7 @@ class LiveViewWidget(QWidget):
         self.combo_stream = QComboBox(top_bar)
         self.combo_stream.addItem("主码流 (高清)", 0)
         self.combo_stream.addItem("子码流 (流畅)", 1)
+        self.combo_stream.currentIndexChanged.connect(self._on_stream_type_changed)
         top_layout.addWidget(self.combo_stream)
 
         top_layout.addStretch()
@@ -319,6 +320,37 @@ class LiveViewWidget(QWidget):
         self.active_slot_id = slot_id
         for slot in self.video_slots:
             slot.set_selected(slot.slot_id == slot_id)
+
+        # Sync stream combo box with active slot's stream type if playing
+        slot_state = self.player_controller.get_slot_state(slot_id)
+        if slot_state and slot_state.is_live:
+            self.combo_stream.blockSignals(True)
+            idx = self.combo_stream.findData(slot_state.stream_type)
+            if idx >= 0:
+                self.combo_stream.setCurrentIndex(idx)
+            self.combo_stream.blockSignals(False)
+
+    def _on_stream_type_changed(self, index: int):
+        """Called immediately when user changes the stream selector (main vs sub)."""
+        stream_type = self.combo_stream.currentData()
+        if stream_type is None:
+            stream_type = 0
+
+        slot = self.player_controller.get_slot_state(self.active_slot_id)
+        if slot and slot.is_live:
+            # If the active slot is currently playing, immediately switch its stream
+            w_id = self.video_slots[self.active_slot_id].get_win_id()
+            ok = self.player_controller.reopen_live_play(
+                slot_id=self.active_slot_id,
+                win_id=w_id,
+                stream_type=stream_type
+            )
+            slot_widget = self.video_slots[self.active_slot_id]
+            st_text = "实时预览中 (主码流)" if stream_type == 0 else "实时预览中 (子码流)"
+            if ok:
+                slot_widget.set_stream_info(slot.channel_name, st_text)
+            else:
+                slot_widget.set_stream_info(slot.channel_name, "切换码流失败")
 
     def toggle_fullscreen(self):
         """Toggle fullscreen mode for currently active slot."""
