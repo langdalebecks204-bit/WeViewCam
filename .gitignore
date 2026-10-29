@@ -9,6 +9,7 @@ Thumbs.db
 *.apk
 *.zip
 *.tar*
+*.exe
 
 # Vendor SDK archives & temp
 **/HCNetSDK*
@@ -36,6 +37,7 @@ logs/
 docs/
 doc/
 
-# Private Device Configs (Preserve ubuntu demo & templates)
+# Private Device Configs (Preserve templates)
 WeViewCam_*/config/devices.json*
+!WeViewCam_*/config_template/devices.json
 !WeViewCam_ubuntu/config/devices.json
