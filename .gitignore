@@ -1,71 +1,41 @@
-# ==========================================
-# WeViewCam Multi-platform Repository .gitignore
-# ==========================================
-
-# OS / Editor Files
+# OS & IDE
 .DS_Store
 Thumbs.db
-desktop.ini
 .idea/
 .vscode/
 *.iml
-*.swp
-*.swo
 
-# Development documentation & plans
+# Binaries & Releases
+*.apk
+*.zip
+*.tar*
+
+# Vendor SDK archives & temp
+**/HCNetSDK*
+
+# Build & Dist
+build/
+dist/
+app/build/
+.gradle/
+.cxx/
+local.properties
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+venv/
+
+# Logs & Docs
+logs/
+*.log
 docs/
 doc/
 
-# ==========================================
-# Android Build & Temporary Files
-# ==========================================
-.gradle/
-build/
-app/build/
-local.properties
-.cxx/
-captures/
-.externalNativeBuild/
-
-# Android Large SDK Archives & Sample Demos
-WeViewCam_android/HCNetSDK*.zip
-WeViewCam_android/HCNetSDKV6.1.11.5*
-
-# Release and installer packages (Distributed via GitHub Releases)
-*.apk
-*.tar.gz
-*.zip
-*.tar
-
-# ==========================================
-# Ubuntu / Python Temporary Files
-# ==========================================
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-.coverage
-htmlcov/
-.venv/
-venv/
-ENV/
-env/
-
-# Large raw vendor SDK archives (Runtime libs are kept in sdk/hikvision/lib)
-WeViewCam_ubuntu/HCNetSDK*.zip
-WeViewCam_ubuntu/HCNetSDKV6.1.11.30*
-WeViewCam_windows/HCNetSDK*.zip
-WeViewCam_windows/HCNetSDKV6.1.11.30*
-WeViewCam_windows/dist/
-WeViewCam_windows/build/
-*.spec
-
-# Logs
-logs/
-*.log
-
-# Sensitive user configuration & private device recordings (Never push to remote)
-WeViewCam_windows/config/devices.json
-WeViewCam_ubuntu/config/devices.json*
+# Private Device Configs (Preserve ubuntu demo & templates)
+WeViewCam_*/config/devices.json*
 !WeViewCam_ubuntu/config/devices.json
-!**/config_template/devices.json
