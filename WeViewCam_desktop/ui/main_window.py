@@ -110,11 +110,32 @@ class MainWindow(QMainWindow):
         self.btn_nav_playback.clicked.connect(lambda: self.switch_view(1))
         top_layout.addWidget(self.btn_nav_playback)
 
+        # PRO Daily Inspection Button
+        self.btn_nav_inspection = QPushButton("📊 智能巡检日报 [PRO]", top_bar)
+        self.btn_nav_inspection.setProperty("class", "navBtn")
+        self.btn_nav_inspection.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1e3a8a, stop:1 #2563eb);
+                color: #ffffff;
+                font-weight: bold;
+                border: 1px solid #3b82f6;
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1d4ed8, stop:1 #3b82f6);
+            }
+        """)
+        self.btn_nav_inspection.clicked.connect(self.open_inspection_module)
+        top_layout.addWidget(self.btn_nav_inspection)
+
         top_layout.addStretch()
 
         # SDK Status indicator
         sdk_lib = HCNetSDKLibrary.get_instance()
-        sdk_status_str = "海康SDK: 已就绪 (Linux 64)" if sdk_lib.is_loaded else "海康SDK: 模拟/未加载"
+        os_label = "Win 64" if sys.platform.startswith("win") else "Linux 64"
+        sdk_status_str = f"海康SDK: 已就绪 ({os_label})" if sdk_lib.is_loaded else "海康SDK: 模拟/未加载"
         self.lbl_sdk_status = QLabel(sdk_status_str, top_bar)
         sdk_color = "#3fb950" if sdk_lib.is_loaded else "#e3b341"
         self.lbl_sdk_status.setStyleSheet(f"color: {sdk_color}; font-size: 12px; font-weight: 500;")
@@ -247,6 +268,26 @@ class MainWindow(QMainWindow):
             self.live_view._refresh_active_slots(self.live_view.current_layout_count)
             if self.live_view.is_single_maximized:
                 self.live_view._reopen_slot_if_playing(self.live_view.active_slot_id)
+
+    def open_inspection_module(self):
+        """Open Daily Inspection Module or PRO License Activation Dialog."""
+        from core.license_manager import LicenseManager
+        is_act, status_msg, lic_data = LicenseManager.is_activated("daily_inspection")
+
+        has_plugin = False
+        try:
+            from plugins.inspection.ui import InspectionWindow
+            has_plugin = True
+        except ImportError:
+            has_plugin = False
+
+        if is_act and has_plugin:
+            dlg = InspectionWindow(self)
+            dlg.exec()
+        else:
+            from ui.pro_license_dialog import ProLicenseDialog
+            dlg = ProLicenseDialog(self)
+            dlg.exec()
         if hasattr(self, "playback_view") and self.playback_view.is_playing:
             cur_t = self.playback_view.timeline._current_time
             w_id = self.playback_view.video_slot.get_win_id()

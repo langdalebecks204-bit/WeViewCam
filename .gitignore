@@ -40,4 +40,12 @@ doc/
 # Private Device Configs (Preserve templates)
 WeViewCam_*/config/devices.json*
 !WeViewCam_*/config_template/devices.json
-!WeViewCam_ubuntu/config/devices.json
+
+# Commercial Plugins & Inspections (Proprietary)
+plugins/
+**/plugins/
+*.lic
+inspections/
+**/inspections/
+gen_license.py
+**/gen_license.py
