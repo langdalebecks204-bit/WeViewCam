@@ -28,6 +28,12 @@ def main():
     dist_dir = os.path.join(base_dir, "dist", "WeViewCam")
     spec_file = os.path.join(base_dir, "WeViewCam.spec")
 
+    # Kill any stale WeViewCam process if running
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "WeViewCam.exe"], capture_output=True)
+    except Exception:
+        pass
+
     # Clean legacy version zips
     legacy_zips = [
         os.path.join(base_dir, "weviewcam_windows_v0.1.2.zip"),
