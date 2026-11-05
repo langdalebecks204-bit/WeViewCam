@@ -217,8 +217,10 @@ def test_hikvision_cvr_multi_group_channels():
         assert channels[0].channel_no == 33
         assert channels[127].channel_no == 160
         # Channels 0, 2, 4... should be unattached, 1, 3, 5... attached
-        attached_count = sum(1 for c in channels if c.is_enabled)
+        attached_count = sum(1 for c in channels if not c.extra.get("unattached", False))
         assert attached_count == 64
+        # All channels must have is_enabled=True so they are rendered in UI device tree
+        assert all(c.is_enabled for c in channels)
     finally:
         driver.sdk_lib = orig_sdk
 

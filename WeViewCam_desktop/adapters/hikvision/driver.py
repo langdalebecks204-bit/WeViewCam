@@ -336,7 +336,20 @@ class HikvisionNativeDriver:
             logger.error(f"海康设备登录失败 {ip}:{port}, 错误码: {err}")
             return -1, None
 
-        logger.info(f"海康设备登录成功 {ip}:{port}, 用户ID: {user_id}")
+        by_chan_num = getattr(device_info, "byChanNum", 0)
+        by_start_chan = getattr(device_info, "byStartChan", 0)
+        by_ip_chan_num = getattr(device_info, "byIPChanNum", 0)
+        by_zero_chan_num = getattr(device_info, "byZeroChanNum", 0)
+        by_high_d_chan = getattr(device_info, "byHighDChanNum", 0)
+        by_start_d_chan = getattr(device_info, "byStartDChan", 0)
+        by_dvr_type = getattr(device_info, "byDVRType", 0)
+        total_ip_hint = by_ip_chan_num + (by_high_d_chan * 256)
+        logger.info(
+            f"海康设备登录成功 {ip}:{port}, 用户ID: {user_id} | "
+            f"设备型号类型:{by_dvr_type}, 模拟通道数:{by_chan_num}(起始:{by_start_chan}), "
+            f"数字通道指示:{total_ip_hint}(byIPChanNum:{by_ip_chan_num}, byHighDChanNum:{by_high_d_chan}, 起始:{by_start_d_chan}), "
+            f"零通道数:{by_zero_chan_num}"
+        )
         return user_id, device_info
 
     def logout(self, user_id: int) -> bool:
@@ -363,15 +376,20 @@ class HikvisionNativeDriver:
             ]
 
         channels = []
+        dig_online_map = {}
+        online_count = 0
 
         by_chan_num = 0
         by_start_chan = 1
         if device_info:
             by_chan_num = getattr(device_info, "byChanNum", 0)
             by_start_chan = getattr(device_info, "byStartChan", 1)
+            logger.info(
+                f"[HikvisionDriver] 开始解析设备通道 user_id={user_id}: "
+                f"模拟通道数={by_chan_num}, 模拟起始通道={by_start_chan}"
+            )
 
         # 1. 尝试检测数字通道连接/在线状态
-        dig_online_map = {}
         try:
             dig_state = NET_DVR_DIGITAL_CHANNEL_STATE()
             dig_state.dwSize = ctypes.sizeof(dig_state)
@@ -396,7 +414,10 @@ class HikvisionNativeDriver:
                     code = dig_state.byDigitalChanStateEx[idx]
                     dig_online_map[64 + idx] = (code == 1)
                 online_count = sum(1 for v in dig_online_map.values() if v)
-                logger.info(f"成功获取设备数字通道状态: 共检出 {online_count} 个在线")
+                logger.info(f"成功获取设备数字通道状态: 共检出 {online_count} 个在线 (已探测 {len(dig_online_map)} 个状态槽位)")
+            else:
+                err = self.sdk_lib.get_last_error()
+                logger.info(f"NET_DVR_GET_DIGITAL_CHANNEL_STATE 查询未返回或设备未支持, 状态码: {err}")
         except Exception as e:
             logger.debug(f"NET_DVR_GET_DIGITAL_CHANNEL_STATE 查询提示: {e}")
 
@@ -447,13 +468,20 @@ class HikvisionNativeDriver:
             start_num = ip_para_cfg.dwStartDChan
             d_chan_num = ip_para_cfg.dwDChanNum
             group_num = ip_para_cfg.dwGroupNum
+            calc_group_num = group_num
             # 如果固件未返回 dwGroupNum 但总通道数大于 64，按 64 通道/组自动计算组数
-            if group_num <= 0 and d_chan_num > 0:
-                group_num = (d_chan_num + 63) // 64
-            elif group_num <= 0:
-                group_num = 1
+            if calc_group_num <= 0 and d_chan_num > 0:
+                calc_group_num = (d_chan_num + 63) // 64
+            elif calc_group_num <= 0:
+                calc_group_num = 1
 
-            for g in range(group_num):
+            logger.info(
+                f"[HikvisionDriver] 获取 NET_DVR_GET_IPPARACFG_V40 成功: "
+                f"dwStartDChan={start_num}, dwDChanNum={d_chan_num}, "
+                f"固件原始dwGroupNum={group_num}, 实际解析总组数={calc_group_num}"
+            )
+
+            for g in range(calc_group_num):
                 if g == 0:
                     current_cfg = ip_para_cfg
                 else:
@@ -469,7 +497,8 @@ class HikvisionNativeDriver:
                         ctypes.byref(bytes_ret_g)
                     )
                     if not ret_g:
-                        logger.warning(f"获取 IP 通道配置组 {g} 失败，尝试继续解析后续组")
+                        err_g = self.sdk_lib.get_last_error()
+                        logger.warning(f"获取 IP 通道配置组 {g} 失败 (错误码:{err_g})，尝试继续解析后续组")
                         continue
 
                 max_slots = min(64, len(current_cfg.struStreamMode))
@@ -481,12 +510,24 @@ class HikvisionNativeDriver:
                     chan_cfg = current_cfg.struStreamMode[slot_idx]
                     ch_no = start_num + global_idx
 
+                    # 采样记录前几个插槽的底层参数，便于深入排错现场海康固件数据
+                    if global_idx < 5 or global_idx == 63 or global_idx == 64:
+                        sample_ipid = getattr(chan_cfg.uGetStream.struChanInfo, 'byIPID', 'N/A')
+                        sample_ipid_h = getattr(chan_cfg.uGetStream.struChanInfo, 'byIPIDHigh', 'N/A')
+                        sample_en = getattr(chan_cfg.uGetStream.struChanInfo, 'byEnable', 'N/A')
+                        logger.info(
+                            f"[HikvisionDriver] 插槽数据采样: global_idx={global_idx}, 组={g}, 槽={slot_idx}, "
+                            f"通道号={ch_no}, StreamType={chan_cfg.byGetStreamType}, "
+                            f"IPID={sample_ipid}, IPIDHigh={sample_ipid_h}, Enable={sample_en}"
+                        )
+
                     # 4.1 判断通道是否已分配前端摄像头 (未分配IP设备的插槽为未接入空通道)
                     is_unattached = False
                     if chan_cfg.byGetStreamType == 0:
                         c_info = chan_cfg.uGetStream.struChanInfo
-                        # 若 byIPID 为 0，说明该数字通道插槽没有绑定任何前端摄像头
-                        if c_info.byIPID == 0:
+                        # 综合判断 byIPID 和 byIPIDHigh (海康企业级大容量 CVR 超过 255 台前端时使用高位)
+                        ipid = c_info.byIPID + (getattr(c_info, "byIPIDHigh", 0) * 256)
+                        if ipid == 0:
                             is_unattached = True
                     elif chan_cfg.byGetStreamType == 6:
                         c_info = chan_cfg.uGetStream.struIPChan
@@ -497,14 +538,12 @@ class HikvisionNativeDriver:
                     else:
                         is_unattached = True
 
-                    # 未接入空通道自动设置 is_enabled=False，并且标记 unattached=True
-                    # 有接入但当前断开的摄像头通道，保留 is_enabled=True，显示为 [离线]
-                    is_chan_enabled = not is_unattached
-
                     # 4.2 判断在线状态
+                    # 在 CVR 集中存储设备上，空闲时通常不维持与所有 IPC 的长连接拉流，NET_DVR_GET_DIGITAL_CHANNEL_STATE 经常返回 0 在线；
+                    # 此时只要已分配通道且无硬件故障，将其置为 True (就绪在线)，供用户随时点播拉流或回放。
                     if is_unattached:
                         is_online = False
-                    elif global_idx in dig_online_map:
+                    elif online_count > 0 and global_idx in dig_online_map:
                         is_online = dig_online_map[global_idx]
                     elif ch_no in work_state_map:
                         is_online = work_state_map[ch_no]
@@ -524,7 +563,7 @@ class HikvisionNativeDriver:
                         name=chan_name,
                         is_online=is_online,
                         is_ptz=True,
-                        is_enabled=is_chan_enabled,
+                        is_enabled=True,
                         extra={"unattached": is_unattached}
                     ))
         else:
@@ -549,6 +588,28 @@ class HikvisionNativeDriver:
                         is_enabled=True,
                         extra={"unattached": False}
                     ))
+
+        # 5. CVR / 大型 NVR 在线状态就绪优化
+        # 在 CVR 集中存储设备上（例如 DS-A71048），空闲待机时通常不与全部前端 IPC 维持长连接拉流，
+        # 导致 NET_DVR_GET_DIGITAL_CHANNEL_STATE 检出 0 个在线；
+        # 若检出 0 个在线，将所有通道置为就绪在线状态 (is_online=True)，确保设备树展开立即可见可点播与回放。
+        unattached_count = sum(1 for c in channels if c.extra.get("unattached", False))
+        if online_count == 0:
+            logger.info(
+                f"[HikvisionDriver] CVR待机就绪模式: 总通道数 {len(channels)} 个 (未绑定前端插槽 {unattached_count} 个), "
+                f"将通道统一置为就绪在线状态供用户点播和回放"
+            )
+            for c in channels:
+                c.is_online = True
+
+        online_final = sum(1 for c in channels if c.is_online)
+        first_chs = ", ".join(f"{c.channel_no}:{c.name}" for c in channels[:3])
+        last_chs = ", ".join(f"{c.channel_no}:{c.name}" for c in channels[-3:]) if len(channels) > 3 else ""
+        logger.info(
+            f"[HikvisionDriver] 通道解析完毕: 总计检出 {len(channels)} 个通道, "
+            f"在线: {online_final}, 离线: {len(channels) - online_final} | "
+            f"首批通道: [{first_chs}]" + (f", 末尾通道: [{last_chs}]" if last_chs else "")
+        )
 
         if not channels:
             channels.append(ChannelInfo(channel_no=1, name="通道 1", is_online=True, is_ptz=True))

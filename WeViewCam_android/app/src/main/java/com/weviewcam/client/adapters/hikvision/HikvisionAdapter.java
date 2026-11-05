@@ -228,6 +228,23 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
                 }
             }
 
+            // 3. CVR / 大型 NVR 空插槽智能精简过滤
+            if (channelList.size() > 64) {
+                List<ChannelInfo> attachedList = new ArrayList<>();
+                for (ChannelInfo ch : channelList) {
+                    if (ch.isOnline()) {
+                        attachedList.add(ch);
+                    }
+                }
+                if (!attachedList.isEmpty()) {
+                    AppLogger.i(MODULE, "CVR智能优化: 总插槽 " + channelList.size() + " 个，精简展示 " + attachedList.size() + " 个已接入前端通道");
+                    channelList = attachedList;
+                } else {
+                    AppLogger.i(MODULE, "CVR智能优化: 插槽均未配置前端IP，保留前 32 个通道");
+                    channelList = new ArrayList<>(channelList.subList(0, Math.min(32, channelList.size())));
+                }
+            }
+
             // If empty, supply default channels from configuration
             if (channelList.isEmpty()) {
                 channelList = deviceInfo.getChannels();

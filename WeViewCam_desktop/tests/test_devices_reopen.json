@@ -1,0 +1,51 @@
+[
+  {
+    "device_id": "test_reopen_dev",
+    "name": "Test Reopen Dev",
+    "ip": "192.168.1.100",
+    "port": 8000,
+    "username": "admin",
+    "password": "",
+    "protocol": "hikvision",
+    "rtsp_port": 554,
+    "channels": [
+      {
+        "channel_no": 1,
+        "name": "海康球机-正门",
+        "is_online": true,
+        "is_ptz": true,
+        "is_enabled": true,
+        "device_id": "test_reopen_dev",
+        "extra": {}
+      },
+      {
+        "channel_no": 2,
+        "name": "海康枪机-周界东",
+        "is_online": true,
+        "is_ptz": false,
+        "is_enabled": true,
+        "device_id": "test_reopen_dev",
+        "extra": {}
+      },
+      {
+        "channel_no": 3,
+        "name": "海康枪机-周界西",
+        "is_online": true,
+        "is_ptz": false,
+        "is_enabled": true,
+        "device_id": "test_reopen_dev",
+        "extra": {}
+      },
+      {
+        "channel_no": 4,
+        "name": "海康半球-大厅入口",
+        "is_online": true,
+        "is_ptz": false,
+        "is_enabled": true,
+        "device_id": "test_reopen_dev",
+        "extra": {}
+      }
+    ],
+    "extra": {}
+  }
+]

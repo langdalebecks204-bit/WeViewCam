@@ -4,6 +4,7 @@ Device & Channel Navigation Tree.
 Lists configured devices and their camera channels with quick double-click-to-play support.
 """
 
+import logging
 from typing import Optional, List, Set
 
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QThread, QSettings
@@ -16,6 +17,8 @@ from PyQt5.QtGui import QIcon, QColor, QBrush, QPixmap, QPainter, QPen
 from core.base_adapter import DeviceInfo, ChannelInfo, ProtocolType
 from core.device_manager import DeviceManager
 
+
+logger = logging.getLogger("VMS.DeviceTree")
 
 _STATUS_ICONS = {}
 
@@ -339,6 +342,7 @@ class DeviceTreeWidget(QWidget):
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
         self.tree.itemDoubleClicked.connect(self._on_item_double_clicked)
+        self.tree.itemExpanded.connect(self._on_item_expanded)
         layout.addWidget(self.tree)
 
         self.refresh_devices()
@@ -445,9 +449,15 @@ class DeviceTreeWidget(QWidget):
                     dev.channels = channels
 
             if channels:
-                for ch in channels:
-                    if not getattr(ch, "is_enabled", True):
-                        continue
+                visible_chs = [ch for ch in channels if getattr(ch, "is_enabled", True)]
+                if not visible_chs:
+                    visible_chs = channels
+                logger.info(
+                    f"[DeviceTree] 渲染设备 [{dev.name}] (ID:{dev.device_id}): "
+                    f"总通道数={len(channels)}, 过滤后可见通道数={len(visible_chs)}"
+                )
+
+                for ch in visible_chs:
                     ch_item = QTreeWidgetItem(dev_item)
                     if ch.is_online:
                         ch_item.setIcon(0, icon_online())
@@ -472,6 +482,11 @@ class DeviceTreeWidget(QWidget):
                 empty_item.setText(0, "(双击设备连接获取通道)")
                 empty_item.setForeground(0, QBrush(QColor("#7d8590")))
                 empty_item.setData(0, Qt.UserRole, {"type": "hint", "device_id": dev.device_id})
+
+    def _on_item_expanded(self, item: QTreeWidgetItem):
+        data = item.data(0, Qt.UserRole)
+        if data and data.get("type") == "device":
+            logger.info(f"[DeviceTree] 设备节点展开: {item.text(0)}, 包含子节点数: {item.childCount()}")
 
     def _on_item_double_clicked(self, item: QTreeWidgetItem, column: int):
         data = item.data(0, Qt.UserRole)
@@ -614,7 +629,7 @@ class DeviceTreeWidget(QWidget):
         if not dev:
             return
         if not dev.is_connected:
-            self.device_manager.connect_device(device_id)
+            self.device_manager.connect_device(device_id, force_refresh=True)
         else:
             adapter = self.device_manager.get_adapter(device_id)
             if adapter:

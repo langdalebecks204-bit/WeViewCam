@@ -11,8 +11,9 @@ import sys
 import shutil
 import zipfile
 import subprocess
+import build_native_modules
 
-VERSION = "0.1.3"
+VERSION = "0.1.4.beta4"
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -47,11 +48,18 @@ def main():
     with open(os.path.join(template_dir, "devices.json"), "w", encoding="utf-8") as f:
         f.write("[]\n")
 
-    # Step 1: Execute PyInstaller compilation using WeViewCam.spec
-    print(f"正在执行 PyInstaller 编译 v{VERSION} ...")
-    subprocess.check_call(["pyinstaller", "--noconfirm", spec_file], cwd=base_dir)
+    # Step 1: Compile core proprietary and license modules into Cython native C-extensions (.pyd)
+    build_native_modules.compile_native_modules(base_dir)
 
-    # Step 2: Ensure convenient root files exist in dist/WeViewCam
+    # Step 2: Execute PyInstaller compilation while isolating plaintext source files
+    print(f"\n正在执行 PyInstaller 原生二进制封装 v{VERSION} ...")
+    with build_native_modules.protect_source_files(base_dir):
+        subprocess.check_call(["pyinstaller", "--noconfirm", spec_file], cwd=base_dir)
+
+    # Step 3: Security audit on distribution directory
+    build_native_modules.sanitize_distribution(dist_dir)
+
+    # Step 4: Ensure convenient root files exist in dist/WeViewCam
     sdk_src = os.path.join(base_dir, "sdk")
     sdk_dst = os.path.join(dist_dir, "sdk")
     if os.path.exists(sdk_src) and not os.path.exists(sdk_dst):
@@ -76,13 +84,23 @@ def main():
         with open(internal_cfg, "w", encoding="utf-8") as f:
             f.write("[]\n")
 
+    # Ensure no license files are bundled into distribution (clean unactivated delivery)
+    for root, dirs, files in os.walk(dist_dir):
+        for f in files:
+            if f.lower().endswith(".lic"):
+                try:
+                    os.remove(os.path.join(root, f))
+                    print(f"  -> 已剔除商业授权文件: {f} (确保发布包纯净未激活)")
+                except Exception:
+                    pass
+
     print(f"正在打包 WeViewCam Windows 独立可执行程序发布包: {out_name} ...")
 
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for root, dirs, files in os.walk(dist_dir):
             dirs[:] = [d for d in dirs if d != "__pycache__" and not d.startswith(".")]
             for f in files:
-                if f.endswith(".pyc"):
+                if f.endswith((".pyc", ".lic")):
                     continue
                 full_f = os.path.join(root, f)
                 rel_f = os.path.relpath(full_f, os.path.dirname(dist_dir))
