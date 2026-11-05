@@ -43,7 +43,7 @@ class DeviceManager:
 
     @staticmethod
     def _merge_channels_preserving_custom(existing_channels: List[ChannelInfo], probed_channels: List[ChannelInfo]) -> List[ChannelInfo]:
-        """Merge newly probed channels while strictly preserving user-customized names and enabled status."""
+        """Merge newly probed channels while preserving user-customized names and manual disabled state."""
         if not existing_channels:
             return probed_channels
         old_map = {c.channel_no: c for c in existing_channels}
@@ -53,7 +53,23 @@ class DeviceManager:
             if old_ch:
                 if old_ch.name and old_ch.name.strip():
                     new_ch.name = old_ch.name
-                new_ch.is_enabled = getattr(old_ch, "is_enabled", True)
+
+                is_unattached = new_ch.extra.get("unattached", False) or not getattr(new_ch, "is_enabled", True)
+                if is_unattached:
+                    # 硬件探测明确是未接入空插槽：强制设为 is_enabled=False 并标记 unattached
+                    new_ch.is_enabled = False
+                    new_ch.extra["unattached"] = True
+                elif old_ch.extra.get("unattached", False):
+                    # 如果原先是空插槽，但本次探测已接入摄像头，解除 unattached 状态并恢复显示
+                    new_ch.is_enabled = True
+                    new_ch.extra.pop("unattached", None)
+                elif not getattr(old_ch, "is_enabled", True):
+                    # 既不是未接入空插槽，但用户此前在通道管理中手动停用了该通道，保留用户手动停用设置
+                    new_ch.is_enabled = False
+                else:
+                    # 正常接入的摄像头（无论当前在线还是离线故障），均保持启用并显示
+                    new_ch.is_enabled = True
+
                 new_ch.is_ptz = getattr(old_ch, "is_ptz", new_ch.is_ptz)
             merged.append(new_ch)
         for rem_ch in old_map.values():
@@ -134,7 +150,7 @@ class DeviceManager:
     def list_devices(self) -> List[DeviceInfo]:
         return list(self._devices.values())
 
-    def connect_device(self, device_id: str) -> bool:
+    def connect_device(self, device_id: str, force_refresh: bool = False) -> bool:
         """Explicitly connect / login to a device and fetch its channels."""
         dev = self._devices.get(device_id)
         if not dev:
@@ -144,11 +160,15 @@ class DeviceManager:
         if not adapter:
             return False
 
-        if adapter.is_connected:
+        if adapter.is_connected and not force_refresh and dev.channels:
             dev.is_connected = True
             return True
 
-        success = adapter.login()
+        if not adapter.is_connected:
+            success = adapter.login()
+        else:
+            success = True
+
         if success:
             dev.is_connected = True
             probed = adapter.get_channels()
@@ -302,16 +322,25 @@ class DeviceManager:
         adapter = self.create_adapter(temp_device)
         try:
             if adapter.login():
-                channels = adapter.get_channels()
-                adapter.logout()
-                online_cnt = sum(1 for c in channels if c.is_online)
-                offline_cnt = len(channels) - online_cnt
-                return True, f"连接成功！获取到 {len(channels)} 个通道 ({online_cnt} 在线, {offline_cnt} 离线)", channels
+                try:
+                    channels = adapter.get_channels()
+                except Exception as ce:
+                    logger.exception(f"登录成功但获取通道列表时发生异常: {ce}")
+                    channels = []
+                finally:
+                    adapter.logout()
+
+                if channels:
+                    online_cnt = sum(1 for c in channels if c.is_online)
+                    offline_cnt = len(channels) - online_cnt
+                    return True, f"连接成功！获取到 {len(channels)} 个通道 ({online_cnt} 在线, {offline_cnt} 离线)", channels
+                else:
+                    return True, "连接成功！但未能枚举到通道（可能为特殊存储设备或通道未就绪）", []
             else:
                 return False, "连接失败，请检查 IP、端口、用户名和密码", []
         except Exception as e:
+            logger.exception(f"测试连接时发生未预期异常: {e}")
             return False, f"连接发生异常: {str(e)}", []
-
     def save_devices(self):
         """Serialize devices to JSON config file."""
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)

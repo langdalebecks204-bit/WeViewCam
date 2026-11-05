@@ -18,8 +18,11 @@ from adapters.hikvision.structures import (
     NET_DVR_TIME,
     NET_DVR_FILECOND,
     NET_DVR_FINDDATA_V30,
+    NET_DVR_FILECOND_V40,
+    NET_DVR_FINDDATA_V40,
     NET_DVR_FILECOND_V50,
     NET_DVR_FINDDATA_V50,
+    NET_DVR_STREAM_INFO,
     NET_DVR_IPPARACFG_V40,
     NET_DVR_LOCAL_SDK_PATH,
     NET_DVR_GET_IPPARACFG_V40,
@@ -90,11 +93,19 @@ class HCNetSDKLibrary:
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         if getattr(sys, "frozen", False):
             app_dir = os.path.dirname(sys.executable)
+            if is_windows:
+                search_paths.append(os.path.join(app_dir, "sdk", "hikvision", "win64"))
+            else:
+                search_paths.append(os.path.join(app_dir, "sdk", "hikvision", "linux64"))
             search_paths.append(os.path.join(app_dir, "sdk", "hikvision", "lib"))
             search_paths.append(os.path.join(app_dir, "sdk", "hikvision"))
             search_paths.append(os.path.join(app_dir, "lib"))
             search_paths.append(app_dir)
             if hasattr(sys, "_MEIPASS"):
+                if is_windows:
+                    search_paths.append(os.path.join(sys._MEIPASS, "sdk", "hikvision", "win64"))
+                else:
+                    search_paths.append(os.path.join(sys._MEIPASS, "sdk", "hikvision", "linux64"))
                 search_paths.append(os.path.join(sys._MEIPASS, "sdk", "hikvision", "lib"))
                 search_paths.append(os.path.join(sys._MEIPASS, "sdk", "hikvision"))
                 search_paths.append(os.path.join(sys._MEIPASS, "lib"))
@@ -200,6 +211,11 @@ class HCNetSDKLibrary:
                     log_dir = os.path.join(base_dir, "logs", "hik_sdk")
                     os.makedirs(log_dir, exist_ok=True)
                     self.hcnetsdk.NET_DVR_SetLogToFile(3, log_dir.encode('utf-8'), False)
+                    try:
+                        self.hcnetsdk.NET_DVR_SetConnectTime(2000, 1)
+                        self.hcnetsdk.NET_DVR_SetReconnect(10000, True)
+                    except Exception:
+                        pass
                     logger.info("海康威视 Windows SDK 初始化成功 (NET_DVR_Init)")
                 else:
                     err = self.hcnetsdk.NET_DVR_GetLastError()
@@ -207,6 +223,14 @@ class HCNetSDKLibrary:
 
             elif is_linux:
                 # Linux 动态库加载
+                # 关键修复：设置 RTLD_GLOBAL | os.RTLD_NOW 确保各 SO 依赖库符号全局可见
+                if hasattr(os, 'RTLD_GLOBAL') and hasattr(sys, 'setdlopenflags'):
+                    try:
+                        sys.setdlopenflags(os.RTLD_GLOBAL | (os.RTLD_NOW if hasattr(os, 'RTLD_NOW') else 2))
+                    except Exception as e:
+                        logger.debug(f"设置 setdlopenflags 提示: {e}")
+
+                # 1. 预加载核心依赖库 (与 0.1.3 严格一致)
                 crypto_path = os.path.join(valid_path, "libcrypto.so.3")
                 ssl_path = os.path.join(valid_path, "libssl.so.3")
                 hpr_path = os.path.join(valid_path, "libhpr.so")
@@ -219,9 +243,11 @@ class HCNetSDKLibrary:
                         except Exception as e:
                             logger.debug(f"加载依赖库 {dep} 提示: {e}")
 
+                # 2. 加载主网络库 libhcnetsdk.so
                 hcnetsdk_so = os.path.join(valid_path, "libhcnetsdk.so")
                 self.hcnetsdk = ctypes.cdll.LoadLibrary(hcnetsdk_so)
 
+                # 3. 加载播放库 libPlayCtrl.so
                 playctrl_so = os.path.join(valid_path, "libPlayCtrl.so")
                 if os.path.exists(playctrl_so):
                     self.playctrl = ctypes.cdll.LoadLibrary(playctrl_so)
@@ -244,14 +270,21 @@ class HCNetSDKLibrary:
                     self._init_success = True
                     log_dir = os.path.join(base_dir, "logs", "hik_sdk")
                     os.makedirs(log_dir, exist_ok=True)
-                    self.hcnetsdk.NET_DVR_SetLogToFile(3, log_dir.encode('utf-8'), False)
+                    # 设为日志级别 2 (ERROR|WARN)，避免终端被周期探测 Private connect 刷屏
+                    self.hcnetsdk.NET_DVR_SetLogToFile(2, log_dir.encode('utf-8'), False)
+                    try:
+                        self.hcnetsdk.NET_DVR_SetConnectTime(2000, 1)
+                        self.hcnetsdk.NET_DVR_SetReconnect(10000, True)
+                    except Exception:
+                        pass
                     logger.info("海康威视 Linux SDK 初始化成功 (NET_DVR_Init)")
                 else:
                     err = self.hcnetsdk.NET_DVR_GetLastError()
                     logger.error(f"海康威视 Linux SDK NET_DVR_Init 失败，错误码: {err}")
 
         except Exception as e:
-            logger.error(f"加载海康威视 SDK 动态库异常: {e}")
+            import traceback
+            logger.error(f"加载海康威视 SDK 动态库异常: {e}\n{traceback.format_exc()}")
             self.is_loaded = False
 
     def cleanup(self):
@@ -353,11 +386,13 @@ class HikvisionNativeDriver:
             )
             if ret_state:
                 # 0-63 通道
-                for idx in range(64):
+                max_c1 = min(64, len(dig_state.byDigitalChanState))
+                for idx in range(max_c1):
                     code = dig_state.byDigitalChanState[idx]
                     dig_online_map[idx] = (code == 1)  # 1 为 CONNECTED (在线)
                 # 64-255 扩展通道
-                for idx in range(192):
+                max_c2 = min(192, len(dig_state.byDigitalChanStateEx))
+                for idx in range(max_c2):
                     code = dig_state.byDigitalChanStateEx[idx]
                     dig_online_map[64 + idx] = (code == 1)
                 online_count = sum(1 for v in dig_online_map.values() if v)
@@ -371,7 +406,8 @@ class HikvisionNativeDriver:
             try:
                 work_state = NET_DVR_WORKSTATE_V30()
                 if self.sdk_lib.hcnetsdk.NET_DVR_GetDVRWorkState_V30(user_id, ctypes.byref(work_state)):
-                    for idx in range(64):
+                    max_w = min(64, len(work_state.struChanStatic))
+                    for idx in range(max_w):
                         st = work_state.struChanStatic[idx]
                         c_no = st.dwChannelNo if (st.dwChannelNo != 0xFFFFFFFF and st.dwChannelNo > 0) else (idx + 1)
                         # bySignalStatic: 0-正常(在线), 1-信号丢失(离线)
@@ -388,11 +424,15 @@ class HikvisionNativeDriver:
                 channel_no=ch_no,
                 name=f"模拟通道 {i + 1}",
                 is_online=is_online,
-                is_ptz=False
+                is_ptz=False,
+                is_enabled=True,
+                extra={"unattached": False}
             ))
 
         # 4. 获取 IP 数字通道配置 (NET_DVR_GET_IPPARACFG_V40)
+        # 支持 CVR / 大型 NVR 多 Group 分组分页获取 (每组 64 个通道，防止超过 64 导致 ctypes 数组越界抛出 invalid index)
         ip_para_cfg = NET_DVR_IPPARACFG_V40()
+        ip_para_cfg.dwSize = ctypes.sizeof(ip_para_cfg)
         bytes_returned = ctypes.c_ulong(0)
         ret = self.sdk_lib.hcnetsdk.NET_DVR_GetDVRConfig(
             user_id,
@@ -406,37 +446,109 @@ class HikvisionNativeDriver:
         if ret:
             start_num = ip_para_cfg.dwStartDChan
             d_chan_num = ip_para_cfg.dwDChanNum
-            for i in range(d_chan_num):
-                chan_cfg = ip_para_cfg.struStreamMode[i]
-                ch_no = start_num + i
+            group_num = ip_para_cfg.dwGroupNum
+            # 如果固件未返回 dwGroupNum 但总通道数大于 64，按 64 通道/组自动计算组数
+            if group_num <= 0 and d_chan_num > 0:
+                group_num = (d_chan_num + 63) // 64
+            elif group_num <= 0:
+                group_num = 1
 
-                # 判断在线状态
-                if i in dig_online_map:
-                    is_online = dig_online_map[i]
-                elif ch_no in work_state_map:
-                    is_online = work_state_map[ch_no]
-                elif chan_cfg.byGetStreamType == 0:
-                    stream_type = chan_cfg.uGetStream.struChanInfo
-                    is_online = bool(stream_type.byEnable)
+            for g in range(group_num):
+                if g == 0:
+                    current_cfg = ip_para_cfg
                 else:
-                    is_online = True
+                    current_cfg = NET_DVR_IPPARACFG_V40()
+                    current_cfg.dwSize = ctypes.sizeof(current_cfg)
+                    bytes_ret_g = ctypes.c_ulong(0)
+                    ret_g = self.sdk_lib.hcnetsdk.NET_DVR_GetDVRConfig(
+                        user_id,
+                        NET_DVR_GET_IPPARACFG_V40,
+                        g,
+                        ctypes.byref(current_cfg),
+                        ctypes.sizeof(current_cfg),
+                        ctypes.byref(bytes_ret_g)
+                    )
+                    if not ret_g:
+                        logger.warning(f"获取 IP 通道配置组 {g} 失败，尝试继续解析后续组")
+                        continue
 
-                # 通道显示名称：从 1 开始顺号，避免从 33 开始让用户困惑
-                if by_chan_num == 0:
-                    # 纯 NVR：规范编号为 "通道 1", "通道 2" ...
-                    chan_name = f"通道 {i + 1}"
-                else:
-                    # 混合型 DVR：接在模拟通道之后顺号
-                    chan_name = f"数字通道 {by_chan_num + i + 1}"
+                max_slots = min(64, len(current_cfg.struStreamMode))
+                for slot_idx in range(max_slots):
+                    global_idx = g * 64 + slot_idx
+                    if d_chan_num > 0 and global_idx >= d_chan_num:
+                        break
 
-                channels.append(ChannelInfo(
-                    channel_no=ch_no,
-                    name=chan_name,
-                    is_online=is_online,
-                    is_ptz=True
-                ))
+                    chan_cfg = current_cfg.struStreamMode[slot_idx]
+                    ch_no = start_num + global_idx
+
+                    # 4.1 判断通道是否已分配前端摄像头 (未分配IP设备的插槽为未接入空通道)
+                    is_unattached = False
+                    if chan_cfg.byGetStreamType == 0:
+                        c_info = chan_cfg.uGetStream.struChanInfo
+                        # 若 byIPID 为 0，说明该数字通道插槽没有绑定任何前端摄像头
+                        if c_info.byIPID == 0:
+                            is_unattached = True
+                    elif chan_cfg.byGetStreamType == 6:
+                        c_info = chan_cfg.uGetStream.struIPChan
+                        if c_info.wIPID == 0:
+                            is_unattached = True
+                    elif chan_cfg.byGetStreamType in (1, 2, 3, 4, 5, 7):
+                        is_unattached = False
+                    else:
+                        is_unattached = True
+
+                    # 未接入空通道自动设置 is_enabled=False，并且标记 unattached=True
+                    # 有接入但当前断开的摄像头通道，保留 is_enabled=True，显示为 [离线]
+                    is_chan_enabled = not is_unattached
+
+                    # 4.2 判断在线状态
+                    if is_unattached:
+                        is_online = False
+                    elif global_idx in dig_online_map:
+                        is_online = dig_online_map[global_idx]
+                    elif ch_no in work_state_map:
+                        is_online = work_state_map[ch_no]
+                    else:
+                        is_online = True
+
+                    # 通道显示名称：从 1 开始顺号，避免从 33 开始让用户困惑
+                    if by_chan_num == 0:
+                        # 纯 NVR / CVR：规范编号为 "通道 1", "通道 2" ...
+                        chan_name = f"通道 {global_idx + 1}"
+                    else:
+                        # 混合型 DVR：接在模拟通道之后顺号
+                        chan_name = f"数字通道 {by_chan_num + global_idx + 1}"
+
+                    channels.append(ChannelInfo(
+                        channel_no=ch_no,
+                        name=chan_name,
+                        is_online=is_online,
+                        is_ptz=True,
+                        is_enabled=is_chan_enabled,
+                        extra={"unattached": is_unattached}
+                    ))
         else:
-            logger.debug("获取数字通道配置未返回 (可能为单个网络IPC摄像机)")
+            logger.debug("获取数字通道配置未返回 (可能为单个网络IPC摄像机或老款CVR固件)")
+            # 兼容老旧 CVR / 固件：若 NET_DVR_GET_IPPARACFG_V40 失败，从 device_info 推算数字通道
+            if device_info:
+                by_ip_chan = getattr(device_info, "byIPChanNum", 0)
+                by_high_d_chan = getattr(device_info, "byHighDChanNum", 0)
+                total_ip_chans = by_ip_chan + (by_high_d_chan * 256)
+                start_d_chan = getattr(device_info, "byStartDChan", 33)
+                if start_d_chan == 0:
+                    start_d_chan = 1 if by_chan_num == 0 else (by_chan_num + 1)
+                for idx in range(total_ip_chans):
+                    ch_no = start_d_chan + idx
+                    is_online = dig_online_map.get(idx, work_state_map.get(ch_no, True))
+                    chan_name = f"通道 {idx + 1}" if by_chan_num == 0 else f"数字通道 {by_chan_num + idx + 1}"
+                    channels.append(ChannelInfo(
+                        channel_no=ch_no,
+                        name=chan_name,
+                        is_online=is_online,
+                        is_ptz=True,
+                        is_enabled=True,
+                        extra={"unattached": False}
+                    ))
 
         if not channels:
             channels.append(ChannelInfo(channel_no=1, name="通道 1", is_online=True, is_ptz=True))
@@ -692,96 +804,215 @@ class HikvisionNativeDriver:
 
         results = []
 
-        # 1. 尝试使用 NET_DVR_FindFile_V50 进行检索
+        # 1. 优先使用适用最广泛的 NET_DVR_FindFile_V40 进行检索 (完美适配现代 NVR/CVR IP 通道)
         try:
-            file_cond = NET_DVR_FILECOND_V50()
-            file_cond.struStreamID.dwChannel = channel_no
-            file_cond.dwFileType = 0xFF
-            file_cond.byFindType = 0
-            file_cond.byIsLocked = 0xFF
-            file_cond.byStreamType = 0
+            file_cond_v40 = NET_DVR_FILECOND_V40()
+            file_cond_v40.lChannel = channel_no
+            file_cond_v40.dwFileType = 0xFF
+            file_cond_v40.dwIsLocked = 0xFF
+            file_cond_v40.dwUseCardNo = 0
+            file_cond_v40.byStreamType = 0  # 优先主码流/子码流
 
-            file_cond.struStartTime.wYear = start_time.year
-            file_cond.struStartTime.byMonth = start_time.month
-            file_cond.struStartTime.byDay = start_time.day
-            file_cond.struStartTime.byHour = start_time.hour
-            file_cond.struStartTime.byMinute = start_time.minute
-            file_cond.struStartTime.bySecond = start_time.second
+            file_cond_v40.struStartTime.dwYear = start_time.year
+            file_cond_v40.struStartTime.dwMonth = start_time.month
+            file_cond_v40.struStartTime.dwDay = start_time.day
+            file_cond_v40.struStartTime.dwHour = start_time.hour
+            file_cond_v40.struStartTime.dwMinute = start_time.minute
+            file_cond_v40.struStartTime.dwSecond = start_time.second
 
-            file_cond.struStopTime.wYear = end_time.year
-            file_cond.struStopTime.byMonth = end_time.month
-            file_cond.struStopTime.byDay = end_time.day
-            file_cond.struStopTime.byHour = end_time.hour
-            file_cond.struStopTime.byMinute = end_time.minute
-            file_cond.struStopTime.bySecond = end_time.second
+            file_cond_v40.struStopTime.dwYear = end_time.year
+            file_cond_v40.struStopTime.dwMonth = end_time.month
+            file_cond_v40.struStopTime.dwDay = end_time.day
+            file_cond_v40.struStopTime.dwHour = end_time.hour
+            file_cond_v40.struStopTime.dwMinute = end_time.minute
+            file_cond_v40.struStopTime.dwSecond = end_time.second
 
-            find_handle = self.sdk_lib.hcnetsdk.NET_DVR_FindFile_V50(
+            find_handle_v40 = self.sdk_lib.hcnetsdk.NET_DVR_FindFile_V40(
                 user_id,
-                ctypes.byref(file_cond)
+                ctypes.byref(file_cond_v40)
             )
 
-            if find_handle >= 0:
-                find_data = NET_DVR_FINDDATA_V50()
-                retries = 0
-                max_retries = 100  # 100 * 0.05s = 5秒
-                while True:
-                    find_res = self.sdk_lib.hcnetsdk.NET_DVR_FindNextFile_V50(
-                        find_handle,
-                        ctypes.byref(find_data)
+            # 若遇到网络或设备短暂繁忙 (错误码 11: 超时, 29: 操作失败)，等待 300ms 自动重试一次
+            if find_handle_v40 < 0:
+                err = self.sdk_lib.get_last_error()
+                if err in (1, 11, 29):
+                    time.sleep(0.3)
+                    find_handle_v40 = self.sdk_lib.hcnetsdk.NET_DVR_FindFile_V40(
+                        user_id,
+                        ctypes.byref(file_cond_v40)
                     )
 
-                    if find_res == 1000:  # NET_DVR_FILE_SUCCESS
-                        retries = 0
+            if find_handle_v40 >= 0:
+                find_data_v40 = NET_DVR_FINDDATA_V40()
+                retries_v40 = 0
+                max_retries = 100
+                while True:
+                    find_res_v40 = self.sdk_lib.hcnetsdk.NET_DVR_FindNextFile_V40(
+                        find_handle_v40,
+                        ctypes.byref(find_data_v40)
+                    )
+
+                    if find_res_v40 == 1000:  # NET_DVR_FILE_SUCCESS
+                        retries_v40 = 0
                         try:
                             s_t = datetime(
-                                int(find_data.struStartTime.wYear),
-                                int(find_data.struStartTime.byMonth),
-                                int(find_data.struStartTime.byDay),
-                                int(find_data.struStartTime.byHour),
-                                int(find_data.struStartTime.byMinute),
-                                int(find_data.struStartTime.bySecond)
+                                int(find_data_v40.struStartTime.dwYear),
+                                int(find_data_v40.struStartTime.dwMonth),
+                                int(find_data_v40.struStartTime.dwDay),
+                                int(find_data_v40.struStartTime.dwHour),
+                                int(find_data_v40.struStartTime.dwMinute),
+                                int(find_data_v40.struStartTime.dwSecond)
                             )
                             e_t = datetime(
-                                int(find_data.struStopTime.wYear),
-                                int(find_data.struStopTime.byMonth),
-                                int(find_data.struStopTime.byDay),
-                                int(find_data.struStopTime.byHour),
-                                int(find_data.struStopTime.byMinute),
-                                int(find_data.struStopTime.bySecond)
+                                int(find_data_v40.struStopTime.dwYear),
+                                int(find_data_v40.struStopTime.dwMonth),
+                                int(find_data_v40.struStopTime.dwDay),
+                                int(find_data_v40.struStopTime.dwHour),
+                                int(find_data_v40.struStopTime.dwMinute),
+                                int(find_data_v40.struStopTime.dwSecond)
                             )
-                            fn = find_data.sFileName.decode('utf-8', errors='ignore').rstrip('\x00').strip()
+                            raw_fn = bytes(find_data_v40.sFileName).split(b'\x00')[0]
+                            try:
+                                fn = raw_fn.decode('gbk')
+                            except Exception:
+                                fn = raw_fn.decode('utf-8', errors='ignore')
+                            fn = fn.strip()
                             results.append(RecordSegment(
                                 channel_no=channel_no,
                                 start_time=s_t,
                                 end_time=e_t,
                                 file_name=fn,
-                                file_size=int(find_data.dwFileSize)
+                                file_size=int(find_data_v40.dwFileSize)
                             ))
                         except Exception as e:
-                            logger.warning(f"解析录像时间异常 (V50): {e}")
-                        continue  # 获取成功，继续循环检索下一个文件
+                            logger.warning(f"解析录像时间异常 (V40): {e}")
+                        continue
 
-                    elif find_res == 1002:  # NET_DVR_ISFINDING: 正在查找，请等待
+                    elif find_res_v40 == 1002:  # NET_DVR_ISFINDING
                         time.sleep(0.05)
-                        retries += 1
-                        if retries > max_retries:
-                            logger.warning(f"通道 {channel_no} V50 检索录像等待超时")
+                        retries_v40 += 1
+                        if retries_v40 > max_retries:
                             break
                         continue
 
-                    elif find_res in (1001, 1003):  # 1001: NET_DVR_FILE_NOFIND, 1003: NET_DVR_NOMOREFILE
+                    elif find_res_v40 in (1001, 1003):  # NOFIND / NOMOREFILE
                         break
                     else:
                         break
 
-                self.sdk_lib.hcnetsdk.NET_DVR_FindClose_V30(find_handle)
+                self.sdk_lib.hcnetsdk.NET_DVR_FindClose_V30(find_handle_v40)
             else:
                 err = self.sdk_lib.get_last_error()
-                logger.debug(f"NET_DVR_FindFile_V50 未建立 (通道 {channel_no}), 错误码: {err}")
+                logger.info(f"NET_DVR_FindFile_V40 未建立 (通道 {channel_no}), 错误码: {err}")
         except Exception as e:
-            logger.warning(f"NET_DVR_FindFile_V50 调用异常: {e}")
+            logger.warning(f"NET_DVR_FindFile_V40 调用异常: {e}")
 
-        # 2. 如果 V50 没有查到录像，自动尝试通用经典的 NET_DVR_FindFile_V30
+        # 2. 如果 V40 没有查到录像，自动尝试使用 NET_DVR_FindFile_V50 (规范初始化 dwSize 与全码流)
+        if len(results) == 0:
+            try:
+                file_cond = NET_DVR_FILECOND_V50()
+                file_cond.struStreamID.dwSize = ctypes.sizeof(NET_DVR_STREAM_INFO)
+                file_cond.struStreamID.dwChannel = channel_no
+                file_cond.dwFileType = 0xFF
+                file_cond.byFindType = 0
+                file_cond.byIsLocked = 0xFF
+                file_cond.byStreamType = 0xFF  # 0xFF-全部码流
+
+                file_cond.struStartTime.wYear = start_time.year
+                file_cond.struStartTime.byMonth = start_time.month
+                file_cond.struStartTime.byDay = start_time.day
+                file_cond.struStartTime.byHour = start_time.hour
+                file_cond.struStartTime.byMinute = start_time.minute
+                file_cond.struStartTime.bySecond = start_time.second
+
+                file_cond.struStopTime.wYear = end_time.year
+                file_cond.struStopTime.byMonth = end_time.month
+                file_cond.struStopTime.byDay = end_time.day
+                file_cond.struStopTime.byHour = end_time.hour
+                file_cond.struStopTime.byMinute = end_time.minute
+                file_cond.struStopTime.bySecond = end_time.second
+
+                find_handle = self.sdk_lib.hcnetsdk.NET_DVR_FindFile_V50(
+                    user_id,
+                    ctypes.byref(file_cond)
+                )
+
+                if find_handle < 0:
+                    err = self.sdk_lib.get_last_error()
+                    if err in (1, 11, 29):
+                        time.sleep(0.3)
+                        find_handle = self.sdk_lib.hcnetsdk.NET_DVR_FindFile_V50(
+                            user_id,
+                            ctypes.byref(file_cond)
+                        )
+
+                if find_handle >= 0:
+                    find_data = NET_DVR_FINDDATA_V50()
+                    retries = 0
+                    max_retries = 100  # 100 * 0.05s = 5秒
+                    while True:
+                        find_res = self.sdk_lib.hcnetsdk.NET_DVR_FindNextFile_V50(
+                            find_handle,
+                            ctypes.byref(find_data)
+                        )
+
+                        if find_res == 1000:  # NET_DVR_FILE_SUCCESS
+                            retries = 0
+                            try:
+                                s_t = datetime(
+                                    int(find_data.struStartTime.wYear),
+                                    int(find_data.struStartTime.byMonth),
+                                    int(find_data.struStartTime.byDay),
+                                    int(find_data.struStartTime.byHour),
+                                    int(find_data.struStartTime.byMinute),
+                                    int(find_data.struStartTime.bySecond)
+                                )
+                                e_t = datetime(
+                                    int(find_data.struStopTime.wYear),
+                                    int(find_data.struStopTime.byMonth),
+                                    int(find_data.struStopTime.byDay),
+                                    int(find_data.struStopTime.byHour),
+                                    int(find_data.struStopTime.byMinute),
+                                    int(find_data.struStopTime.bySecond)
+                                )
+                                raw_fn = bytes(find_data.sFileName).split(b'\x00')[0]
+                                try:
+                                    fn = raw_fn.decode('gbk')
+                                except Exception:
+                                    fn = raw_fn.decode('utf-8', errors='ignore')
+                                fn = fn.strip()
+                                results.append(RecordSegment(
+                                    channel_no=channel_no,
+                                    start_time=s_t,
+                                    end_time=e_t,
+                                    file_name=fn,
+                                    file_size=int(find_data.dwFileSize)
+                                ))
+                            except Exception as e:
+                                logger.warning(f"解析录像时间异常 (V50): {e}")
+                            continue  # 获取成功，继续循环检索下一个文件
+
+                        elif find_res == 1002:  # NET_DVR_ISFINDING: 正在查找，请等待
+                            time.sleep(0.05)
+                            retries += 1
+                            if retries > max_retries:
+                                logger.warning(f"通道 {channel_no} V50 检索录像等待超时")
+                                break
+                            continue
+
+                        elif find_res in (1001, 1003):  # 1001: NET_DVR_FILE_NOFIND, 1003: NET_DVR_NOMOREFILE
+                            break
+                        else:
+                            break
+
+                    self.sdk_lib.hcnetsdk.NET_DVR_FindClose_V30(find_handle)
+                else:
+                    err = self.sdk_lib.get_last_error()
+                    logger.info(f"NET_DVR_FindFile_V50 未建立 (通道 {channel_no}), 错误码: {err}")
+            except Exception as e:
+                logger.warning(f"NET_DVR_FindFile_V50 调用异常: {e}")
+
+        # 3. 如果 V40 与 V50 仍未查到录像，自动尝试通用经典 NET_DVR_FindFile_V30
         if len(results) == 0:
             try:
                 file_cond_v30 = NET_DVR_FILECOND()

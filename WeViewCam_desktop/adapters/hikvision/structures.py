@@ -268,8 +268,11 @@ NET_DVR_LOCAL_SDK_PATH._fields_ = [
 ]
 
 
-# 窗口句柄类型定义 (兼容 64位 / 32位)
-HWND = c_void_p if sys.maxsize > 2**32 else c_uint32
+# 窗口句柄类型定义 (Windows 64位为指针 c_void_p，Linux 下海康 SDK 结构体严格固定为 32位 c_uint32 以保持 280 字节内存对齐)
+if sys.platform.startswith("win"):
+    HWND = c_void_p if sys.maxsize > 2**32 else c_uint32
+else:
+    HWND = c_uint32
 
 # 定义预览参数结构体
 class NET_DVR_PREVIEWINFO(Structure):
@@ -893,6 +896,51 @@ class NET_DVR_FINDDATA_V30(Structure):
 
 
 LPNET_DVR_FINDDATA_V30 = POINTER(NET_DVR_FINDDATA_V30)
+
+
+class NET_DVR_FILECOND_V40(Structure):
+    _fields_ = [
+        ("lChannel", c_int32),
+        ("dwFileType", c_uint32),
+        ("dwIsLocked", c_uint32),
+        ("dwUseCardNo", c_uint32),
+        ("sCardNumber", c_char * 32),
+        ("struStartTime", NET_DVR_TIME),
+        ("struStopTime", NET_DVR_TIME),
+        ("byDrawFrame", c_ubyte),
+        ("byFindType", c_ubyte),
+        ("byQuickSearch", c_ubyte),
+        ("bySpecialFindInfoType", c_ubyte),
+        ("dwVolumeNum", c_uint32),
+        ("byWorkingDeviceGUID", c_ubyte * 16),
+        ("uSpecialFindInfo", NET_DVR_SPECIAL_FINDINFO_UNION),
+        ("byStreamType", c_ubyte),
+        ("byAudioFile", c_ubyte),
+        ("byRes2", c_ubyte * 30),
+    ]
+
+
+LPNET_DVR_FILECOND_V40 = POINTER(NET_DVR_FILECOND_V40)
+
+
+class NET_DVR_FINDDATA_V40(Structure):
+    _fields_ = [
+        ("sFileName", c_char * 100),
+        ("struStartTime", NET_DVR_TIME),
+        ("struStopTime", NET_DVR_TIME),
+        ("dwFileSize", c_uint32),
+        ("sCardNum", c_char * 32),
+        ("byLocked", c_ubyte),
+        ("byFileType", c_ubyte),
+        ("byQuickSearch", c_ubyte),
+        ("byRes", c_ubyte),
+        ("dwFileIndex", c_uint32),
+        ("byStreamType", c_ubyte),
+        ("byRes1", c_ubyte * 127),
+    ]
+
+
+LPNET_DVR_FINDDATA_V40 = POINTER(NET_DVR_FINDDATA_V40)
 
 
 

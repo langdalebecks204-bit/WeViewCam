@@ -163,3 +163,97 @@ def test_player_controller_reopen():
     if os.path.exists("tests/test_devices_reopen.json"):
         os.remove("tests/test_devices_reopen.json")
 
+
+def test_hikvision_cvr_multi_group_channels():
+    """
+    Test channel discovery on high-density CVR storage devices (e.g., DS-A71048)
+    with 128+ channels across multiple groups to prevent ctypes 'invalid index' errors.
+    """
+    import ctypes
+    from unittest.mock import MagicMock
+    from adapters.hikvision.driver import HikvisionNativeDriver
+    from adapters.hikvision.structures import (
+        NET_DVR_IPPARACFG_V40,
+        NET_DVR_STREAM_MODE,
+        NET_DVR_DEVICEINFO_V30
+    )
+
+    driver = HikvisionNativeDriver()
+    # Save original state
+    orig_sdk = driver.sdk_lib
+
+    try:
+        mock_sdk = MagicMock()
+        mock_sdk.is_loaded = True
+        mock_sdk_hcnetsdk = MagicMock()
+        mock_sdk.hcnetsdk = mock_sdk_hcnetsdk
+        driver.sdk_lib = mock_sdk
+
+        # Mock NET_DVR_GetDVRConfig to simulate a 128-channel CVR with 2 groups
+        def mock_get_dvr_config(user_id, command, group_idx, out_ptr, out_size, ret_ptr):
+            if command == 1062:  # NET_DVR_GET_IPPARACFG_V40
+                cfg = getattr(out_ptr, "_obj", out_ptr)
+                cfg.dwSize = ctypes.sizeof(NET_DVR_IPPARACFG_V40)
+                cfg.dwGroupNum = 2
+                cfg.dwDChanNum = 128
+                cfg.dwStartDChan = 33
+                # Populate slots in this group
+                for i in range(64):
+                    cfg.struStreamMode[i].byGetStreamType = 0
+                    cfg.struStreamMode[i].uGetStream.struChanInfo.byIPID = (i % 2)  # 50% attached
+                return 1
+            return 0
+
+        mock_sdk_hcnetsdk.NET_DVR_GetDVRConfig.side_effect = mock_get_dvr_config
+
+        dev_info = NET_DVR_DEVICEINFO_V30()
+        dev_info.byChanNum = 0
+        dev_info.byStartChan = 1
+
+        # Must not raise IndexError: invalid index!
+        channels = driver.get_channels(user_id=1, device_info=dev_info)
+
+        assert len(channels) == 128
+        assert channels[0].channel_no == 33
+        assert channels[127].channel_no == 160
+        # Channels 0, 2, 4... should be unattached, 1, 3, 5... attached
+        attached_count = sum(1 for c in channels if c.is_enabled)
+        assert attached_count == 64
+    finally:
+        driver.sdk_lib = orig_sdk
+
+
+
+
+def test_hikvision_cvr_legacy_fallback():
+    """Test fallback to device_info when NET_DVR_GET_IPPARACFG_V40 is unsupported by legacy CVR."""
+    from unittest.mock import MagicMock
+    from adapters.hikvision.driver import HikvisionNativeDriver
+    from adapters.hikvision.structures import NET_DVR_DEVICEINFO_V30
+
+    driver = HikvisionNativeDriver()
+    orig_sdk = driver.sdk_lib
+
+    try:
+        mock_sdk = MagicMock()
+        mock_sdk.is_loaded = True
+        mock_sdk_hcnetsdk = MagicMock()
+        mock_sdk.hcnetsdk = mock_sdk_hcnetsdk
+        driver.sdk_lib = mock_sdk
+
+        # Simulate V40 unsupported (returns 0)
+        mock_sdk_hcnetsdk.NET_DVR_GetDVRConfig.return_value = 0
+
+        dev_info = NET_DVR_DEVICEINFO_V30()
+        dev_info.byChanNum = 0
+        dev_info.byStartChan = 1
+        dev_info.byIPChanNum = 48  # 48 IP channels
+        dev_info.byHighDChanNum = 0
+        dev_info.byStartDChan = 33
+
+        channels = driver.get_channels(user_id=1, device_info=dev_info)
+        assert len(channels) == 48
+        assert channels[0].channel_no == 33
+        assert channels[47].channel_no == 80
+    finally:
+        driver.sdk_lib = orig_sdk

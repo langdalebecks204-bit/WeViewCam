@@ -28,6 +28,7 @@ class HikvisionAdapter(BaseDeviceAdapter):
         self.driver = HikvisionNativeDriver()
         self._user_id = -1
         self._device_raw_info = None
+        self._rtsp_handles = {}
 
     def login(self) -> bool:
         if self._is_logged_in and self._user_id >= 0:
@@ -76,6 +77,28 @@ class HikvisionAdapter(BaseDeviceAdapter):
         win_id: int,
         stream_type: int = 0
     ) -> int:
+        import os
+        use_rtsp = os.environ.get("HIK_FORCE_RTSP") == "1" or not self.driver.is_available
+        if use_rtsp:
+            from adapters.onvif.player import RtspPlayerManager
+            mgr = RtspPlayerManager.get_instance()
+            rtsp_port = 554
+            stream_suffix = "1" if stream_type == 0 else "2"
+            nvr_ch = channel_no * 100 + (1 if stream_type == 0 else 2)
+            candidates = [
+                f"rtsp://{self.device_info.username}:{self.device_info.password}@{self.device_info.ip}:{rtsp_port}/Streaming/Channels/{nvr_ch}",
+                f"rtsp://{self.device_info.username}:{self.device_info.password}@{self.device_info.ip}:{rtsp_port}/Streaming/Channels/{channel_no}{stream_suffix}",
+                f"rtsp://{self.device_info.username}:{self.device_info.password}@{self.device_info.ip}:{rtsp_port}/h264/ch{channel_no}/{'main' if stream_type == 0 else 'sub'}/av_stream",
+            ]
+            play_h = mgr.start_play(
+                rtsp_url=candidates[0],
+                win_id=win_id,
+                candidate_urls=candidates
+            )
+            self._rtsp_handles[play_h] = play_h
+            logger.info(f"海康设备使用 RTSP 备选引擎拉流: 通道={channel_no}, handle={play_h}")
+            return play_h
+
         if not self._is_logged_in or self._user_id < 0:
             if not self.login():
                 return -1
@@ -88,9 +111,19 @@ class HikvisionAdapter(BaseDeviceAdapter):
         )
 
     def stop_real_play(self, play_handle: int) -> bool:
+        if play_handle in self._rtsp_handles:
+            from adapters.onvif.player import RtspPlayerManager
+            mgr = RtspPlayerManager.get_instance()
+            mgr.stop_play(play_handle)
+            self._rtsp_handles.pop(play_handle, None)
+            return True
         return self.driver.stop_real_play(play_handle)
 
     def capture_picture(self, play_handle: int, save_path: str) -> bool:
+        if play_handle in self._rtsp_handles:
+            from adapters.onvif.player import RtspPlayerManager
+            mgr = RtspPlayerManager.get_instance()
+            return mgr.capture_picture(play_handle, save_path)
         return self.driver.capture_picture(play_handle, save_path)
 
     def start_record(self, play_handle: int, save_path: str) -> bool:

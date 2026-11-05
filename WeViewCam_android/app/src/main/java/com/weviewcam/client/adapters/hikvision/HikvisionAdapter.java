@@ -159,7 +159,7 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
                 channelList.add(new ChannelInfo(chNo, "模拟通道 " + (i + 1), isOnline, true, deviceInfo.getDeviceId()));
             }
 
-            // 2. IP Digital channels via NET_DVR_IPPARACFG_V40
+            // 2. IP Digital channels via NET_DVR_IPPARACFG_V40 (supports multi-group paging for CVR/large NVR)
             NET_DVR_IPPARACFG_V40 ipPara = new NET_DVR_IPPARACFG_V40();
             boolean getIpOk = HCNetSDK.getInstance().NET_DVR_GetDVRConfig(
                     userId,
@@ -168,16 +168,62 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
                     ipPara
             );
 
-            if (getIpOk && ipPara.dwDChanNum > 0 && ipPara.struIPChanInfo != null) {
+            if (getIpOk && ipPara.dwDChanNum > 0) {
                 int ipStartChan = ipPara.dwStartDChan;
-                for (int i = 0; i < ipPara.dwDChanNum && i < ipPara.struIPChanInfo.length; i++) {
-                    int dChanNo = ipStartChan + i;
-                    boolean isConfigured = (ipPara.struIPChanInfo[i].byEnable == 1);
-                    boolean isOnline = isConfigured;
-                    if (channelSignalMap.containsKey(i)) {
-                        isOnline = isConfigured && Boolean.TRUE.equals(channelSignalMap.get(i));
+                int totalDChan = ipPara.dwDChanNum;
+                int groupNum = ipPara.dwGroupNum;
+                if (groupNum <= 0 && totalDChan > 0) {
+                    groupNum = (totalDChan + 63) / 64;
+                } else if (groupNum <= 0) {
+                    groupNum = 1;
+                }
+
+                for (int g = 0; g < groupNum; g++) {
+                    NET_DVR_IPPARACFG_V40 currentCfg = ipPara;
+                    if (g > 0) {
+                        currentCfg = new NET_DVR_IPPARACFG_V40();
+                        boolean retG = HCNetSDK.getInstance().NET_DVR_GetDVRConfig(
+                                userId,
+                                HCNetSDK.NET_DVR_GET_IPPARACFG_V40,
+                                g,
+                                currentCfg
+                        );
+                        if (!retG || currentCfg.struIPChanInfo == null) {
+                            AppLogger.w(MODULE, "获取 IP 通道配置组 " + g + " 失败或无数据，跳过");
+                            continue;
+                        }
                     }
-                    String label = (chanNum == 0) ? ("通道 " + (i + 1)) : ("数字通道 " + (i + 1));
+
+                    if (currentCfg.struIPChanInfo != null) {
+                        int maxSlots = Math.min(64, currentCfg.struIPChanInfo.length);
+                        for (int slotIdx = 0; slotIdx < maxSlots; slotIdx++) {
+                            int globalIdx = g * 64 + slotIdx;
+                            if (totalDChan > 0 && globalIdx >= totalDChan) {
+                                break;
+                            }
+
+                            int dChanNo = ipStartChan + globalIdx;
+                            boolean isConfigured = (currentCfg.struIPChanInfo[slotIdx].byEnable == 1);
+                            boolean isOnline = isConfigured;
+                            if (channelSignalMap.containsKey(globalIdx)) {
+                                isOnline = isConfigured && Boolean.TRUE.equals(channelSignalMap.get(globalIdx));
+                            }
+                            String label = (chanNum == 0) ? ("通道 " + (globalIdx + 1)) : ("数字通道 " + (chanNum + globalIdx + 1));
+                            channelList.add(new ChannelInfo(dChanNo, label, isOnline, true, deviceInfo.getDeviceId()));
+                        }
+                    }
+                }
+            } else if (!getIpOk && deviceInfoV40 != null && deviceInfoV40.struDeviceV30 != null) {
+                // Fallback for legacy CVR / NVR firmware that does not support NET_DVR_GET_IPPARACFG_V40
+                int ipChans = (deviceInfoV40.struDeviceV30.byIPChanNum & 0xFF) + ((deviceInfoV40.struDeviceV30.byHighDChanNum & 0xFF) * 256);
+                int startD = deviceInfoV40.struDeviceV30.byStartDChan;
+                if (startD <= 0) {
+                    startD = (chanNum == 0) ? 1 : (chanNum + 1);
+                }
+                for (int i = 0; i < ipChans; i++) {
+                    int dChanNo = startD + i;
+                    boolean isOnline = channelSignalMap.containsKey(i) ? Boolean.TRUE.equals(channelSignalMap.get(i)) : true;
+                    String label = (chanNum == 0) ? ("通道 " + (i + 1)) : ("数字通道 " + (chanNum + i + 1));
                     channelList.add(new ChannelInfo(dChanNo, label, isOnline, true, deviceInfo.getDeviceId()));
                 }
             }
