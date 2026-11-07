@@ -11,7 +11,11 @@ import pytest
 def setup_test_environment(monkeypatch):
     """Ensure tests run in deterministic mock environment without needing physical camera hardware."""
     monkeypatch.setenv("HIK_SDK_MOCK", "1")
+    monkeypatch.setenv("DAHUA_SDK_MOCK", "1")
     from adapters.hikvision.driver import HCNetSDKLibrary
+    from adapters.dahua.driver import DahuaSDKLibrary
     HCNetSDKLibrary._instance = None
+    DahuaSDKLibrary._instance = None
     yield
     HCNetSDKLibrary._instance = None
+    DahuaSDKLibrary._instance = None

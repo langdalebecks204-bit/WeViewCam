@@ -100,15 +100,56 @@ def test_hikvision_adapter_lifecycle():
     assert adapter.is_connected is False
 
 
-def test_dahua_and_onvif_adapters():
-    # Dahua
-    dh_info = DeviceInfo(device_id="dh_test", name="DH", ip="10.0.0.2", protocol=ProtocolType.DAHUA)
+def test_dahua_adapter_lifecycle():
+    dh_info = DeviceInfo(
+        device_id="dh_test_lifecycle",
+        name="Dahua Test Device",
+        ip="192.168.1.100",
+        port=37777,
+        username="admin",
+        password="password123",
+        protocol=ProtocolType.DAHUA
+    )
     dh_adapter = DahuaAdapter(dh_info)
     assert dh_adapter.login() is True
-    assert len(dh_adapter.get_channels()) > 0
-    assert dh_adapter.logout() is True
+    assert dh_adapter.is_connected is True
 
-    # ONVIF
+    # Channels
+    channels = dh_adapter.get_channels()
+    assert len(channels) > 0
+    assert channels[0].device_id == "dh_test_lifecycle"
+
+    # Real play
+    play_h = dh_adapter.start_real_play(channel_no=1, win_id=1001)
+    assert play_h > 0
+    assert dh_adapter.stop_real_play(play_h) is True
+
+    # PTZ
+    assert dh_adapter.ptz_control(channel_no=1, command=PTZCommand.UP, speed=4) is True
+    assert dh_adapter.ptz_control(channel_no=1, command=PTZCommand.ZOOM_IN, speed=4) is True
+
+    # Snapshot & Record
+    assert dh_adapter.capture_picture(play_handle=play_h, save_path="test_snap.jpg") is True
+    assert dh_adapter.start_record(play_handle=play_h, save_path="test_rec.mp4") is True
+    assert dh_adapter.stop_record(play_handle=play_h) is True
+
+    # Playback
+    s_time = datetime(2026, 9, 15, 0, 0, 0)
+    e_time = datetime(2026, 9, 15, 23, 59, 59)
+    records = dh_adapter.find_records(channel_no=1, start_time=s_time, end_time=e_time)
+    assert len(records) > 0
+    pb_h = dh_adapter.start_playback_by_time(1, 0, s_time, e_time)
+    assert pb_h > 0
+    assert dh_adapter.playback_control(pb_h, PlaybackCommand.PAUSE) is True
+    assert dh_adapter.playback_control(pb_h, PlaybackCommand.RESTART) is True
+    assert dh_adapter.stop_playback(pb_h) is True
+
+    # Logout
+    assert dh_adapter.logout() is True
+    assert dh_adapter.is_connected is False
+
+
+def test_onvif_adapter():
     onvif_info = DeviceInfo(device_id="onvif_test", name="ONVIF", ip="10.0.0.3", protocol=ProtocolType.ONVIF)
     onvif_adapter = OnvifAdapter(onvif_info)
     assert onvif_adapter.login() is True

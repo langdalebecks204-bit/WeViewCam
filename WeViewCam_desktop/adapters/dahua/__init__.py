@@ -1,4 +1,7 @@
-"""Dahua SDK adapter module (reserved for future NetSDK integration)."""
-from adapters.dahua.adapter import DahuaAdapter
+# -*- coding: utf-8 -*-
+"""Dahua NetSDK adapter module."""
 
-__all__ = ["DahuaAdapter"]
+from .adapter import DahuaAdapter
+from .driver import DahuaNativeDriver, DahuaSDKLibrary
+
+__all__ = ["DahuaAdapter", "DahuaNativeDriver", "DahuaSDKLibrary"]

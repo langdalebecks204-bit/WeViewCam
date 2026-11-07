@@ -13,6 +13,8 @@ Thumbs.db
 
 # Vendor SDK archives & temp
 **/HCNetSDK*
+**/设备网络SDK*
+**/General_NetSDK*
 
 # Build & Dist
 build/
