@@ -300,3 +300,12 @@ def test_hikvision_cvr_legacy_fallback():
         assert channels[47].channel_no == 80
     finally:
         driver.sdk_lib = orig_sdk
+
+
+def test_main_window_startup():
+    from PyQt5.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    from ui.main_window import MainWindow
+    win = MainWindow()
+    assert win is not None
+    assert "WeViewCam" in win.windowTitle()

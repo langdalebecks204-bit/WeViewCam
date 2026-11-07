@@ -32,6 +32,7 @@ class MainWindow(QMainWindow):
     """Main Surveillance Operations Center Window."""
 
     def __init__(self):
+        super().__init__()
         platform_name = "Windows x64" if sys.platform.startswith("win") else "Linux x86_64"
         self.setWindowTitle(f"WeViewCam - 智能视频监控平台 v{__version__} ({platform_name})")
         self.resize(1280, 800)
