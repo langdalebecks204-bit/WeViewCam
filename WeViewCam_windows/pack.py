@@ -107,6 +107,10 @@ def main():
     # Copy to latest and workspace root
     shutil.copy2(out_path, latest_path)
     shutil.copy2(out_path, workspace_out)
+    top_root = os.path.dirname(root_dir)
+    if os.path.exists(top_root):
+        shutil.copy2(out_path, os.path.join(top_root, out_name))
+        shutil.copy2(out_path, os.path.join(top_root, latest_name))
 
     size_mb = os.path.getsize(out_path) / (1024 * 1024)
     print(f"\n========================================================")
@@ -115,9 +119,6 @@ def main():
     print(f"工作区副本: {workspace_out}")
     print(f"隐私安全核查: 已完全剔除任何用户私有设备配置")
     print(f"========================================================")
-
-if __name__ == "__main__":
-    main()
 
 if __name__ == "__main__":
     main()

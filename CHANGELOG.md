@@ -76,4 +76,4 @@
 
 ### 📁 发布构件 (Artifacts)
 - **Ubuntu 发布包**：`weviewcam_ubuntu_v0.1.5.tar.gz` (71.7 MB)
-- **Windows 便携包**：`weviewcam_windows_v0.1.5.zip` (409 MB)
+- **Windows 便携包**：`weviewcam_windows_v0.1.5.zip` (230.9 MB)
