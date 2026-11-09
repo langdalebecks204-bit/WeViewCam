@@ -381,15 +381,15 @@ class DahuaNativeDriver:
         # 0: Main stream (Realplay), 1: Sub stream (Realplay_1)
         r_type = SDK_RealPlayType.Realplay if stream_type == 0 else SDK_RealPlayType.Realplay_1
 
-        is_linux = sys.platform.startswith("linux")
         logger.info(
             f"大华发起实时预览: login_id={login_id}, 通道={channel_no}(dh_idx={dh_channel}), "
             f"win_id={win_id}, 码流={stream_type}"
         )
-        sys.stdout.flush()
+        if sys.stdout and hasattr(sys.stdout, "flush"):
+            sys.stdout.flush()
 
-        # 在 Linux 环境下优先采用官方标准的 PlaySDK 硬件加速灌流直出管线 (100% 对齐官方 RealPlayDemo.py)
-        if is_linux and win_id > 0:
+        # 优先采用官方标准的 PlaySDK 硬件加速灌流直出管线 (100% 对齐官方 RealPlayDemo.py，杜绝窗口子类化与 Qt 消息循环冲突)
+        if win_id > 0:
             try:
                 res, free_port = self.sdk_lib.net_client.GetFreePort()
                 if res and free_port is not None:
@@ -405,7 +405,8 @@ class DahuaNativeDriver:
                         self.sdk_lib.net_client.SetRealDataCallBackEx2(play_id, cb_ref, None, EM_REALDATA_FLAG.RAW_DATA)
                         self._live_sessions[int(play_id)] = (free_port, cb_ref, True)
                         logger.info(f"✓ 大华实时预览已通过官方 PlaySDK 硬件加速管线启动 (play_id={play_id}, port={free_port})")
-                        sys.stdout.flush()
+                        if sys.stdout and hasattr(sys.stdout, "flush"):
+                            sys.stdout.flush()
                         return int(play_id)
                     else:
                         try:
@@ -423,7 +424,8 @@ class DahuaNativeDriver:
             err = self.sdk_lib.get_last_error()
             msg = self.sdk_lib.get_last_error_msg()
             logger.error(f"大华开启实时预览失败: 通道={channel_no}, 错误码={err}, 信息={msg}")
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
             return -1
 
         self._live_sessions[int(play_id)] = (None, None, False)
@@ -686,7 +688,8 @@ class DahuaNativeDriver:
             f"大华按时间发起回放: login_id={login_id}, 通道={channel_no}(dh_idx={dh_channel}), "
             f"win_id={win_id}, 时间范围=[{s_str} 至 {e_str}]"
         )
-        sys.stdout.flush()
+        if sys.stdout and hasattr(sys.stdout, "flush"):
+            sys.stdout.flush()
 
         play_handle = 0
 
@@ -698,17 +701,12 @@ class DahuaNativeDriver:
                 except Exception:
                     pass
 
-        # 严格遵循大华官方 PlayBackDemo：
-        # NetSDK 自带完整的硬件解码与自绘引擎，只要传入有效的窗口句柄 hWnd=win_id，
-        # 底层即会自动将解码后的画面渲染到窗口上。绝不可在外部手动使用 PlaySDK 重复开流与抢占窗口，
-        # 否则在多次切换时会引起底层 OpenGL/X11 句柄竞争导致段错误 (SIGSEGV) 崩溃。
         target_hwnd = int(win_id) if win_id > 0 else 0
-        is_linux = sys.platform.startswith("linux")
         pb_port = None
         pb_cb = _dh_playback_data_callback
 
-        # Linux 环境下优先采用与 test_dahua.py 相同的 PlaySDK 灌流硬件加速管线
-        if is_linux and win_id > 0:
+        # 优先采用与官方标准对齐的 PlaySDK 硬件加速灌流直出管线 (杜绝窗口子类化与 Qt 消息循环冲突)
+        if win_id > 0:
             try:
                 res, port = self.sdk_lib.net_client.GetFreePort()
                 if res and port is not None:
@@ -759,7 +757,8 @@ class DahuaNativeDriver:
             out_param = NET_OUT_PLAY_BACK_BY_TIME_INFO()
 
             logger.info(f"大华调用 NetSDK.PlayBackByTimeEx2 (hWnd={target_hwnd})...")
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
             play_handle = self.sdk_lib.net_client.PlayBackByTimeEx2(
                 login_id,
                 dh_channel,
@@ -767,16 +766,19 @@ class DahuaNativeDriver:
                 out_param
             )
             logger.info(f"大华 NetSDK.PlayBackByTimeEx2 返回 play_handle={play_handle}")
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
         except Exception as e:
             logger.error(f"[DahuaDriver] 调用 PlayBackByTimeEx2 异常: {e}", exc_info=True)
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
 
         # 2. 若 Ex2 失败或返回 0，尝试 PlayBackByTimeEx 兼容接口
         if not play_handle:
             try:
                 logger.info(f"大华尝试调用 PlayBackByTimeEx 兼容接口 (hWnd={target_hwnd})...")
-                sys.stdout.flush()
+                if sys.stdout and hasattr(sys.stdout, "flush"):
+                    sys.stdout.flush()
                 play_handle = self.sdk_lib.net_client.PlayBackByTimeEx(
                     login_id,
                     dh_channel,
@@ -785,16 +787,25 @@ class DahuaNativeDriver:
                     target_hwnd,
                     _dh_playback_pos_callback,
                     0,
-                    _dh_playback_data_callback,
+                    pb_cb,
                     0
                 )
                 logger.info(f"大华 PlayBackByTimeEx 返回 handle={play_handle}")
-                sys.stdout.flush()
+                if sys.stdout and hasattr(sys.stdout, "flush"):
+                    sys.stdout.flush()
             except Exception as e:
                 logger.error(f"[DahuaDriver] 调用 PlayBackByTimeEx 异常: {e}", exc_info=True)
-                sys.stdout.flush()
+                if sys.stdout and hasattr(sys.stdout, "flush"):
+                    sys.stdout.flush()
 
         if not play_handle or play_handle == 0:
+            if pb_port is not None:
+                try:
+                    self.sdk_lib.net_client.Stop(pb_port)
+                    self.sdk_lib.net_client.CloseStream(pb_port)
+                    self.sdk_lib.net_client.ReleasePort(pb_port)
+                except Exception:
+                    pass
             err = self.sdk_lib.get_last_error()
             err_msg = self.sdk_lib.get_last_error_msg()
             hint = ""
@@ -803,7 +814,8 @@ class DahuaNativeDriver:
             elif err == 7:
                 hint = " (参数错误，请检查窗口句柄 HWND 是否有效)"
             logger.error(f"大华按时间回放失败: 通道 {channel_no}, 错误码: {err} ({err_msg}){hint}")
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
             return -1
 
         h_val = int(play_handle)
@@ -811,7 +823,8 @@ class DahuaNativeDriver:
         self._playback_sessions[h_val] = (pb_port, pb_cb)
 
         logger.info(f"大华按时间回放成功启动: handle={h_val}, 通道={channel_no}")
-        sys.stdout.flush()
+        if sys.stdout and hasattr(sys.stdout, "flush"):
+            sys.stdout.flush()
         return h_val
 
     def get_playback_pos(self, playback_handle: int) -> int:
@@ -871,10 +884,12 @@ class DahuaNativeDriver:
             return True
 
         logger.info(f"大华停止回放 handle={h_val}...")
-        sys.stdout.flush()
+        if sys.stdout and hasattr(sys.stdout, "flush"):
+            sys.stdout.flush()
         ret = self.sdk_lib.net_client.StopPlayBack(h_val)
         logger.info(f"大华停止回放完成: ret={bool(ret)}")
-        sys.stdout.flush()
+        if sys.stdout and hasattr(sys.stdout, "flush"):
+            sys.stdout.flush()
         return bool(ret)
 
     def capture_picture(self, login_id: int, channel_no: int, save_path: str) -> bool:

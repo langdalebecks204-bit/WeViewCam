@@ -549,7 +549,7 @@ class NetClient(metaclass=Singleton):
                     cls.play_sdk.PLAY_OpenStream.restype = c_int
                     cls.play_sdk.PLAY_InputData.argtypes = [c_int, POINTER(c_ubyte), c_uint]
                     cls.play_sdk.PLAY_InputData.restype = c_int
-                    cls.play_sdk.PLAY_Play.argtypes = [c_int, C_LONG]
+                    cls.play_sdk.PLAY_Play.argtypes = [c_int, c_void_p]
                     cls.play_sdk.PLAY_Play.restype = c_int
                     cls.play_sdk.PLAY_Stop.argtypes = [c_int]
                     cls.play_sdk.PLAY_Stop.restype = c_int
@@ -1420,7 +1420,7 @@ class NetClient(metaclass=Singleton):
         try:
             port_val = port.value if hasattr(port, "value") else int(port)
             hwnd_val = hwnd.value if hasattr(hwnd, "value") else int(hwnd or 0)
-            result = cls.play_sdk.PLAY_Play(port_val, C_LONG(hwnd_val))
+            result = cls.play_sdk.PLAY_Play(port_val, c_void_p(hwnd_val))
             if not result:
                 print('PLAY_Play error!')
             return bool(result)

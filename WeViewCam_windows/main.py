@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-WeViewCam Video Surveillance and Recording Playback Application (Ubuntu / Linux Edition).
+WeViewCam Video Surveillance and Recording Playback Application (Windows Edition).
 Supports Hikvision, Dahua, and ONVIF with native hardware rendering and RTSP fallback.
 """
 
@@ -9,6 +9,39 @@ import os
 import sys
 import ctypes
 import faulthandler
+
+# 0. Windows PyInstaller frozen safety: guard stdout/stderr when None (noconsole mode)
+class NullWriter:
+    def write(self, *args, **kwargs):
+        pass
+    def flush(self, *args, **kwargs):
+        pass
+    def isatty(self):
+        return False
+
+if sys.stdout is None:
+    sys.stdout = NullWriter()
+if sys.stderr is None:
+    sys.stderr = NullWriter()
+
+# Configure Windows DLL search directories before importing SDKs
+if sys.platform.startswith("win"):
+    base_dir = os.path.dirname(os.path.abspath(__file__)) if not getattr(sys, "frozen", False) else os.path.dirname(sys.executable)
+    dahua_win64 = os.path.join(base_dir, "sdk", "dahua", "win64")
+    hik_win64 = os.path.join(base_dir, "sdk", "hikvision", "win64")
+    for d in [dahua_win64, hik_win64]:
+        if os.path.isdir(d):
+            try:
+                ctypes.windll.kernel32.SetDllDirectoryW(d)
+            except Exception:
+                pass
+            if hasattr(os, "add_dll_directory"):
+                try:
+                    os.add_dll_directory(d)
+                except Exception:
+                    pass
+            if d not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
 
 # Enable C-level crash trace capture for SIGSEGV, SIGABRT, SIGFPE, SIGILL
 try:
@@ -35,6 +68,11 @@ from core.logger import setup_logger, get_logger
 # Initialize structured logging
 setup_logger()
 logger = get_logger("Main")
+
+def global_excepthook(exctype, value, tb):
+    logger.error("Unhandled Python exception:", exc_info=(exctype, value, tb))
+
+sys.excepthook = global_excepthook
 
 
 def set_windows_app_id():

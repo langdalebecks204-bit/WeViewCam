@@ -296,13 +296,15 @@ class PlaybackWidget(QWidget):
         if 0 <= row < len(self.current_records):
             seg = self.current_records[row]
             logger.info(f"[PlaybackWidget] 用户双击录像列表第 {row} 行: {seg.start_time} 至 {seg.end_time}, 文件={seg.file_name}")
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
             self.start_playback_at(seg.start_time, seg.end_time)
 
     def _on_timeline_time_selected(self, target_dt: datetime):
         self.lbl_time_display.setText(f"当前时间: {target_dt.strftime('%H:%M:%S')}")
         logger.info(f"[PlaybackWidget] 用户在时间轴上点击选择时间: {target_dt}")
-        sys.stdout.flush()
+        if sys.stdout and hasattr(sys.stdout, "flush"):
+            sys.stdout.flush()
         self.start_playback_at(target_dt)
 
     def start_playback_at(self, target_time: datetime, target_end_time: Optional[datetime] = None):
@@ -338,7 +340,8 @@ class PlaybackWidget(QWidget):
                 f"[PlaybackWidget] 发起回放: dev_id={dev_id}, 通道={ch_no}({ch_name}), "
                 f"win_id={win_id}, 时间范围=[{target_time} 至 {end_time}]"
             )
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
 
             ok = self.player_controller.start_playback(
                 slot_id=self.playback_slot_id,
@@ -350,7 +353,8 @@ class PlaybackWidget(QWidget):
                 channel_name=ch_name
             )
             logger.info(f"[PlaybackWidget] player_controller.start_playback 执行结果: {ok}")
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
 
             if ok:
                 self.is_playing = True
@@ -364,7 +368,8 @@ class PlaybackWidget(QWidget):
                 self.video_slot.set_stream_info(ch_name, "回放开启失败")
         except Exception as e:
             logger.error(f"[PlaybackWidget] start_playback_at 发生异常: {e}", exc_info=True)
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
         finally:
             self._is_switching = False
 
@@ -372,7 +377,8 @@ class PlaybackWidget(QWidget):
         if not self.is_playing:
             # Try start from timeline current time
             logger.info(f"[PlaybackWidget] 点击播放按钮，从时间轴当前时间启动: {self.timeline._current_time}")
-            sys.stdout.flush()
+            if sys.stdout and hasattr(sys.stdout, "flush"):
+                sys.stdout.flush()
             self.start_playback_at(self.timeline._current_time)
             return
 
