@@ -19,6 +19,8 @@ Thumbs.db
 # Build & Dist
 build/
 dist/
+weviewcam_windows_v*/
+**/weviewcam_windows_v*/
 app/build/
 .gradle/
 .cxx/
