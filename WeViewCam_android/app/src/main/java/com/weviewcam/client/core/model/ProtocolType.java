@@ -10,7 +10,7 @@ public enum ProtocolType {
     ONVIF("onvif", "ONVIF 国际标准"),
 
     @SerializedName(value = "dahua", alternate = {"DAHUA"})
-    DAHUA("dahua", "大华协议 (保留)"),
+    DAHUA("dahua", "大华协议"),
 
     @SerializedName(value = "custom_rtsp", alternate = {"CUSTOM_RTSP"})
     CUSTOM_RTSP("custom_rtsp", "自定义 RTSP");

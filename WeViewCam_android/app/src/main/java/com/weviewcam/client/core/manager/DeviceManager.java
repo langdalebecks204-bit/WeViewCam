@@ -123,9 +123,7 @@ public class DeviceManager {
         this.context = context;
         this.gson = new GsonBuilder().setPrettyPrinting().create();
         loadDevices();
-        initAutoRefresh();
-        // 启动时自动重新连接所有设备探测最新通道在线状态
-        mainHandler.postDelayed(() -> refreshAllDevicesStatus(null), 800L);
+        // 保持按需连接，避免启动阶段后台突发并发网络请求与资源竞争
     }
 
     public synchronized List<DeviceInfo> getDevices() {
@@ -334,55 +332,73 @@ public class DeviceManager {
      * Async test connection method
      */
     public void testConnection(DeviceInfo device, OnTestConnectionListener listener) {
+        AppLogger.i(MODULE, "[TEST_CONN 0] 收到设备连接测试请求: " + (device != null ? device.getName() + " (" + device.getIp() + ":" + device.getPort() + ", 协议=" + device.getProtocol() + ")" : "null"));
         executor.execute(() -> {
-            BaseDeviceAdapter adapter = DeviceAdapterFactory.createAdapter(device);
-            boolean loginOk = adapter.login();
+            AppLogger.i(MODULE, "[TEST_CONN 1] 进入后台测试任务线程...");
+            boolean loginOk = false;
             final List<ChannelInfo> finalChannels = new ArrayList<>();
-            final String finalMsg;
+            String msg = "连接失败";
+            try {
+                AppLogger.i(MODULE, "[TEST_CONN 2] 准备通过工厂构建适配器...");
+                BaseDeviceAdapter adapter = DeviceAdapterFactory.createAdapter(device);
+                AppLogger.i(MODULE, "[TEST_CONN 3] 适配器创建成功: " + adapter.getClass().getSimpleName() + "，准备执行 adapter.login()...");
+                loginOk = adapter.login();
+                AppLogger.i(MODULE, "[TEST_CONN 4] adapter.login() 返回结果: " + loginOk);
 
-            if (loginOk) {
-                List<ChannelInfo> chs = adapter.getChannels();
-                if (chs == null || chs.isEmpty()) {
-                    chs = new ArrayList<>();
-                    chs.add(new ChannelInfo(1, "通道 1", true, false, device.getDeviceId()));
-                }
-                
-                // Preserve existing custom names and enabled/disabled preferences
-                Map<Integer, ChannelInfo> existingMap = new HashMap<>();
-                if (device.getChannels() != null) {
-                    for (ChannelInfo oldCh : device.getChannels()) {
-                        existingMap.put(oldCh.getChannelNo(), oldCh);
+                if (loginOk) {
+                    AppLogger.i(MODULE, "[TEST_CONN 5] 登录成功，准备探测通道...");
+                    List<ChannelInfo> chs = adapter.getChannels();
+                    AppLogger.i(MODULE, "[TEST_CONN 5.1] 通道探测结果数量: " + (chs != null ? chs.size() : 0));
+                    if (chs == null || chs.isEmpty()) {
+                        chs = new ArrayList<>();
+                        chs.add(new ChannelInfo(1, "通道 1", true, false, device.getDeviceId()));
                     }
-                }
-                for (ChannelInfo newCh : chs) {
-                    ChannelInfo oldCh = existingMap.get(newCh.getChannelNo());
-                    if (oldCh != null) {
-                        if (oldCh.getName() != null && !oldCh.getName().trim().isEmpty()) {
-                            newCh.setName(oldCh.getName());
+                    
+                    // Preserve existing custom names and enabled/disabled preferences
+                    Map<Integer, ChannelInfo> existingMap = new HashMap<>();
+                    if (device.getChannels() != null) {
+                        for (ChannelInfo oldCh : device.getChannels()) {
+                            existingMap.put(oldCh.getChannelNo(), oldCh);
                         }
-                        newCh.setEnabled(oldCh.isEnabled());
                     }
-                }
+                    for (ChannelInfo newCh : chs) {
+                        ChannelInfo oldCh = existingMap.get(newCh.getChannelNo());
+                        if (oldCh != null) {
+                            if (oldCh.getName() != null && !oldCh.getName().trim().isEmpty()) {
+                                newCh.setName(oldCh.getName());
+                            }
+                            newCh.setEnabled(oldCh.isEnabled());
+                        }
+                    }
 
-                finalChannels.addAll(chs);
-                device.setConnected(true);
-                device.setChannels(finalChannels);
-                updateDevice(device);
-                saveDevices();
-                finalMsg = "连接成功！已获取 " + finalChannels.size() + " 个视频通道。";
-                adapter.logout();
-                device.setConnected(true);
-                saveDevices();
-            } else {
+                    finalChannels.addAll(chs);
+                    device.setConnected(true);
+                    device.setChannels(finalChannels);
+                    updateDevice(device);
+                    saveDevices();
+                    msg = "连接成功！已获取 " + finalChannels.size() + " 个视频通道。";
+                    try {
+                        adapter.logout();
+                    } catch (Throwable ignored) {}
+                    device.setConnected(true);
+                    saveDevices();
+                } else {
+                    device.setConnected(false);
+                    updateDevice(device);
+                    saveDevices();
+                    msg = "连接失败，请检查 IP 地址、端口或凭据。";
+                }
+            } catch (Throwable t) {
+                AppLogger.e(MODULE, "测试设备连接发生未捕获异常: " + t.getMessage(), t);
+                msg = "测试连接异常: " + t.getMessage();
                 device.setConnected(false);
-                updateDevice(device);
-                saveDevices();
-                finalMsg = "连接失败，请检查 IP 地址、端口或凭据。";
             }
 
+            final String finalMsg = msg;
+            final boolean finalLoginOk = loginOk;
             mainHandler.post(() -> {
                 if (listener != null) {
-                    listener.onResult(loginOk, finalMsg, finalChannels);
+                    listener.onResult(finalLoginOk, finalMsg, finalChannels);
                 }
             });
         });
@@ -434,7 +450,7 @@ public class DeviceManager {
                                 }
                             }
                         }
-                    } catch (Exception e) {
+                    } catch (Throwable e) {
                         AppLogger.e(MODULE, "刷新设备状态异常: " + dev.getName() + ", " + e.getMessage());
                         dev.setConnected(false);
                     } finally {

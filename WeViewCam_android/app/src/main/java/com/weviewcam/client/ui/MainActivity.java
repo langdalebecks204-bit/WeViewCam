@@ -1,6 +1,7 @@
 package com.weviewcam.client.ui;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -35,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        com.weviewcam.client.core.logger.AppLogger.init(this);
         setContentView(R.layout.activity_main);
 
         appHeader = findViewById(R.id.app_header);
@@ -46,13 +48,7 @@ public class MainActivity extends AppCompatActivity {
         if (tvVersion != null) {
             String verText = "v" + getAppVersionName(this);
             tvVersion.setText(verText);
-            tvVersion.setOnClickListener(v -> {
-                new androidx.appcompat.app.AlertDialog.Builder(this)
-                        .setTitle("关于 WeViewCam")
-                        .setMessage("WeViewCam 移动监控平台客户端\n版本: " + verText + "\n构建: Android Edition (arm64-v8a / armeabi-v7a)\n支持: 多画面实时预览 / 远程录像回放 / 设备配置备份")
-                        .setPositiveButton("确定", null)
-                        .show();
-            });
+            tvVersion.setOnClickListener(v -> showAboutAndLogDialog(verText));
         }
 
         // Pre-initialize DeviceManager
@@ -200,11 +196,79 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public static String getAppVersionName(android.content.Context context) {
-        if (context == null) return "0.1.3";
+        if (context == null) return "0.1.5";
         try {
             return context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
         } catch (Exception e) {
-            return "0.1.3";
+            return "0.1.5";
         }
+    }
+
+    private void showAboutAndLogDialog(String verText) {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("关于 WeViewCam")
+                .setMessage("WeViewCam 移动监控平台客户端\n版本: " + verText +
+                        "\n构建: Android Edition (arm64-v8a / armeabi-v7a)" +
+                        "\n日志文件: Android/data/com.weviewcam.client/files/app.log" +
+                        "\n支持: 多画面实时预览 / 远程录像回放 / 设备配置备份")
+                .setPositiveButton("确定", null)
+                .setNeutralButton("查看运行日志", (dialog, which) -> showLogViewerDialog())
+                .show();
+    }
+
+    private void showLogViewerDialog() {
+        java.io.File logFile = com.weviewcam.client.core.logger.AppLogger.getLogFile();
+        StringBuilder logContent = new StringBuilder();
+        if (logFile != null && logFile.exists()) {
+            try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(logFile), java.nio.charset.StandardCharsets.UTF_8))) {
+                java.util.List<String> lines = new java.util.ArrayList<>();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    lines.add(line);
+                }
+                int start = Math.max(0, lines.size() - 300);
+                for (int i = start; i < lines.size(); i++) {
+                    logContent.append(lines.get(i)).append("\n");
+                }
+            } catch (Exception e) {
+                logContent.append("读取日志失败: ").append(e.getMessage());
+            }
+        } else {
+            logContent.append("暂无本地运行日志文件。");
+        }
+
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
+        android.widget.TextView textView = new android.widget.TextView(this);
+        textView.setText(logContent.toString());
+        textView.setTextSize(11);
+        textView.setTypeface(android.graphics.Typeface.MONOSPACE);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        textView.setPadding(pad, pad, pad, pad);
+        textView.setTextIsSelectable(true);
+        scrollView.addView(textView);
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("应用运行日志 (最近 300 行)")
+                .setView(scrollView)
+                .setPositiveButton("关闭", null)
+                .setNegativeButton("抓取底层Logcat", (d, w) -> {
+                    String systemLogs = com.weviewcam.client.core.logger.AppLogger.dumpSystemLogcat();
+                    textView.setText(systemLogs);
+                    android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                    if (cm != null) {
+                        android.content.ClipData clip = android.content.ClipData.newPlainText("WeViewCam System Logcat", systemLogs);
+                        cm.setPrimaryClip(clip);
+                        android.widget.Toast.makeText(this, "底层系统 Logcat 已抓取并复制到剪贴板！", android.widget.Toast.LENGTH_LONG).show();
+                    }
+                })
+                .setNeutralButton("复制日志", (d, w) -> {
+                    android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                    if (cm != null) {
+                        android.content.ClipData clip = android.content.ClipData.newPlainText("WeViewCam Log", textView.getText());
+                        cm.setPrimaryClip(clip);
+                        android.widget.Toast.makeText(this, "日志已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
     }
 }

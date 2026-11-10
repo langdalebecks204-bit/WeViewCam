@@ -6,10 +6,8 @@ import android.os.Environment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.Spinner;
+import android.widget.ExpandableListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -27,6 +25,7 @@ import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PlaybackCommand;
 import com.weviewcam.client.core.model.RecordSegment;
 import com.weviewcam.client.ui.MainActivity;
+import com.weviewcam.client.ui.live.NvrChannelExpandableAdapter;
 import com.weviewcam.client.ui.view.SurveillanceSurfaceView;
 import com.weviewcam.client.ui.view.TimelineBarView;
 
@@ -42,7 +41,7 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     private static final String MODULE = "Playback";
 
     private View layoutPlaybackToolbar;
-    private Spinner spinnerChannel;
+    private Button btnChannelSelect;
     private Button btnSelectDate;
     private Button btnSearchRecords;
     private SurveillanceSurfaceView viewportPlayback;
@@ -74,6 +73,8 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     private boolean isPlaying = false;
     private float currentSpeed = 1.0f;
 
+    private final DeviceManager.OnDeviceChangeListener deviceChangeListener = this::loadChannels;
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -84,6 +85,7 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         deviceManager = DeviceManager.getInstance(requireContext());
+        deviceManager.addOnDeviceChangeListener(deviceChangeListener);
 
         initViews(view);
         setupListeners();
@@ -94,7 +96,7 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     }
 
     private void initViews(View root) {
-        spinnerChannel = root.findViewById(R.id.spinner_playback_channel);
+        btnChannelSelect = root.findViewById(R.id.btn_playback_channel_select);
         btnSelectDate = root.findViewById(R.id.btn_select_date);
         btnSearchRecords = root.findViewById(R.id.btn_search_records);
         viewportPlayback = root.findViewById(R.id.viewport_playback);
@@ -123,6 +125,12 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     }
 
     private void setupListeners() {
+        if (btnChannelSelect != null) {
+            btnChannelSelect.setOnClickListener(v -> showChannelPickerDialog());
+        }
+        if (viewportPlayback != null) {
+            viewportPlayback.setOnClickListener(v -> showChannelPickerDialog());
+        }
         btnSelectDate.setOnClickListener(v -> showDatePicker());
         btnSearchRecords.setOnClickListener(v -> searchRecords());
         if (btnAspectRatio != null) {
@@ -164,38 +172,123 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
 
     private void loadChannels() {
         allChannels.clear();
-        List<String> labels = new ArrayList<>();
         for (DeviceInfo dev : deviceManager.getDevices()) {
-            String devName = (dev.getName() != null && !dev.getName().trim().isEmpty()) ? dev.getName() : "NVR";
-            for (ChannelInfo ch : dev.getEnabledChannels()) {
-                allChannels.add(ch);
-                String status = ch.isOnline() ? " [在线]" : " [离线]";
-                labels.add(devName + " - " + ch.getName() + status);
-            }
+            allChannels.addAll(dev.getEnabledChannels());
         }
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(), android.R.layout.simple_spinner_item, labels);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinnerChannel.setAdapter(adapter);
-
-        spinnerChannel.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (position >= 0 && position < allChannels.size()) {
-                    selectedChannel = allChannels.get(position);
-                    viewportPlayback.setChannelInfo(selectedChannel);
-                    updateAdapter();
-                    searchRecords();
-                }
-            }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
-        });
-
-        if (!allChannels.isEmpty()) {
+        if (selectedChannel == null && !allChannels.isEmpty()) {
             selectedChannel = allChannels.get(0);
+        }
+
+        updateChannelSelectButton(selectedChannel);
+
+        if (selectedChannel != null) {
             viewportPlayback.setChannelInfo(selectedChannel);
             updateAdapter();
         }
+    }
+
+    private void updateChannelSelectButton(ChannelInfo info) {
+        if (btnChannelSelect == null) return;
+        if (info != null) {
+            DeviceInfo dev = (deviceManager != null) ? deviceManager.getDevice(info.getDeviceId()) : null;
+            String devName = (dev != null && dev.getName() != null && !dev.getName().trim().isEmpty()) ? dev.getName() : "";
+            String label = devName.isEmpty() ? info.getName() : (devName + " - " + info.getName());
+            btnChannelSelect.setText(label);
+        } else {
+            btnChannelSelect.setText("选择通道");
+        }
+    }
+
+    private void showChannelPickerDialog() {
+        List<DeviceInfo> devices = (deviceManager != null) ? deviceManager.getDevices() : new ArrayList<>();
+        if (devices.isEmpty() || allChannels.isEmpty()) {
+            Toast.makeText(getContext(), "暂无可用通道，请先在设备管理中添加并测试连接设备", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_channel_picker, null);
+        TextView tvSubtitle = dialogView.findViewById(R.id.tv_dialog_target_viewport);
+        ExpandableListView elvTree = dialogView.findViewById(R.id.elv_channel_tree);
+        TextView tvEmpty = dialogView.findViewById(R.id.tv_empty_notice);
+        Button btnClose = dialogView.findViewById(R.id.btn_dialog_close);
+
+        if (tvSubtitle != null) {
+            tvSubtitle.setText("目标: 录像回放");
+        }
+
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        List<DeviceInfo> validDevices = new ArrayList<>();
+        for (DeviceInfo d : devices) {
+            if (d.getEnabledChannels() != null && !d.getEnabledChannels().isEmpty()) {
+                validDevices.add(d);
+            }
+        }
+
+        if (validDevices.isEmpty()) {
+            elvTree.setVisibility(View.GONE);
+            tvEmpty.setVisibility(View.VISIBLE);
+        } else {
+            elvTree.setVisibility(View.VISIBLE);
+            tvEmpty.setVisibility(View.GONE);
+
+            NvrChannelExpandableAdapter adapter = new NvrChannelExpandableAdapter(
+                    requireContext(),
+                    validDevices,
+                    selectedChannel,
+                    new NvrChannelExpandableAdapter.OnChannelSelectedListener() {
+                        @Override
+                        public void onChannelSelected(DeviceInfo device, ChannelInfo chosenChannel) {
+                            dialog.dismiss();
+                            if (selectedChannel != null && selectedChannel.getChannelNo() == chosenChannel.getChannelNo()
+                                    && selectedChannel.getDeviceId() != null && selectedChannel.getDeviceId().equals(chosenChannel.getDeviceId())) {
+                                return;
+                            }
+                            stopPlayback();
+                            selectedChannel = chosenChannel;
+                            updateChannelSelectButton(selectedChannel);
+                            viewportPlayback.setChannelInfo(selectedChannel);
+                            updateAdapter();
+                            searchRecords();
+                            Toast.makeText(getContext(), "已选择: " + device.getName() + " - " + chosenChannel.getName(), Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onChannelLongClicked(DeviceInfo device, ChannelInfo channel) {
+                        }
+                    }
+            );
+            elvTree.setAdapter(adapter);
+
+            // 点击某设备时展开该设备并收起其它设备
+            elvTree.setOnGroupExpandListener(groupPosition -> {
+                for (int i = 0; i < validDevices.size(); i++) {
+                    if (i != groupPosition && elvTree.isGroupExpanded(i)) {
+                        elvTree.collapseGroup(i);
+                    }
+                }
+            });
+
+            // 默认展开当前选中通道所在的设备
+            if (selectedChannel != null) {
+                for (int i = 0; i < validDevices.size(); i++) {
+                    if (validDevices.get(i).getDeviceId() != null && validDevices.get(i).getDeviceId().equals(selectedChannel.getDeviceId())) {
+                        elvTree.expandGroup(i);
+                        break;
+                    }
+                }
+            }
+        }
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
     }
 
     private void updateAdapter() {
@@ -277,7 +370,8 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
         if (currentAdapter == null || selectedChannel == null) return;
 
         if (playbackHandle >= 0) {
-            currentAdapter.stopPlayback(playbackHandle);
+            final int oldHandle = playbackHandle;
+            new Thread(() -> currentAdapter.stopPlayback(oldHandle)).start();
             playbackHandle = -1;
         }
 
@@ -287,21 +381,47 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
         endOfDay.set(Calendar.MINUTE, 59);
         endOfDay.set(Calendar.SECOND, 59);
 
-        viewportPlayback.postDelayed(() -> {
-            if (viewportPlayback.isSurfaceReady()) {
-                playbackHandle = currentAdapter.startPlaybackByTime(
-                        selectedChannel.getChannelNo(),
-                        viewportPlayback.getSurface(),
-                        time,
-                        endOfDay.getTime()
-                );
-                if (playbackHandle >= 0) {
-                    isPlaying = true;
-                    btnPlay.setText("暂停");
-                    viewportPlayback.setPlayHandle(playbackHandle);
+        Runnable startTask = new Runnable() {
+            int retries = 0;
+            @Override
+            public void run() {
+                if (viewportPlayback != null && viewportPlayback.isSurfaceReady()) {
+                    new Thread(() -> {
+                        int handle = currentAdapter.startPlaybackByTime(
+                                selectedChannel.getChannelNo(),
+                                viewportPlayback.getSurface(),
+                                time,
+                                endOfDay.getTime()
+                        );
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                playbackHandle = handle;
+                                if (playbackHandle >= 0) {
+                                    isPlaying = true;
+                                    btnPlay.setText("暂停");
+                                    viewportPlayback.setPlayHandle(playbackHandle);
+                                    AppLogger.i(MODULE, "回放启动成功: handle=" + playbackHandle);
+                                } else {
+                                    isPlaying = false;
+                                    btnPlay.setText("播放");
+                                    Toast.makeText(getContext(), "回放启动失败，请检查网络或录像段", Toast.LENGTH_SHORT).show();
+                                    AppLogger.e(MODULE, "回放启动失败: startPlaybackByTime 返回 -1");
+                                }
+                            });
+                        }
+                    }).start();
+                } else if (retries < 5 && viewportPlayback != null) {
+                    retries++;
+                    viewportPlayback.postDelayed(this, 150);
+                } else {
+                    AppLogger.w(MODULE, "seekToTime 放弃: SurfaceView 持续未就绪");
                 }
             }
-        }, 100);
+        };
+
+        if (viewportPlayback != null) {
+            viewportPlayback.postDelayed(startTask, 50);
+        }
     }
 
     private void togglePlayPause() {
@@ -411,6 +531,9 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        if (deviceManager != null) {
+            deviceManager.removeOnDeviceChangeListener(deviceChangeListener);
+        }
         stopPlayback();
         if (currentAdapter != null) {
             currentAdapter.logout();

@@ -1,5 +1,6 @@
 package com.weviewcam.client.core.adapter;
 
+import com.weviewcam.client.adapters.dahua.DahuaAdapter;
 import com.weviewcam.client.adapters.hikvision.HikvisionAdapter;
 import com.weviewcam.client.adapters.mock.MockDeviceAdapter;
 import com.weviewcam.client.adapters.onvif.OnvifAdapter;
@@ -30,6 +31,12 @@ public class DeviceAdapterFactory {
             case CUSTOM_RTSP:
                 return new OnvifAdapter(device);
             case DAHUA:
+                try {
+                    return new DahuaAdapter(device);
+                } catch (Throwable t) {
+                    AppLogger.w(MODULE, "创建大华官方NetSDK适配器异常，降级启用仿真适配器: " + t.getMessage());
+                    return new MockDeviceAdapter(device);
+                }
             default:
                 return new MockDeviceAdapter(device);
         }
