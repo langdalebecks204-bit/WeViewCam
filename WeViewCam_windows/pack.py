@@ -12,7 +12,7 @@ import shutil
 import zipfile
 import subprocess
 
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))

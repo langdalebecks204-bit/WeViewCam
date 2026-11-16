@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Desktop-PyQt5%20%2F%20Qt5-41CD52?logo=qt" alt="Desktop Tech">
     <img src="https://img.shields.io/badge/Android-Java%20%7C%20SurfaceView-3DDC84?logo=android" alt="Android Tech">
     <img src="https://img.shields.io/badge/SDK-Hikvision%20%7C%20Dahua%20%7C%20ONVIF-brightgreen" alt="Supported SDKs">
-    <img src="https://img.shields.io/badge/Release-v0.1.5-orange" alt="Release">
+    <img src="https://img.shields.io/badge/Release-v0.1.6-orange" alt="Release">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
   </p>
 </div>
