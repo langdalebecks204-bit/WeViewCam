@@ -114,20 +114,6 @@ class MainWindow(QMainWindow):
 
         top_layout.addStretch()
 
-        # SDK Status indicator
-        hik_lib = HCNetSDKLibrary.get_instance()
-        dh_lib = DahuaSDKLibrary.get_instance()
-        os_label = "Win 64" if sys.platform.startswith("win") else "Linux 64"
-        hik_status = "已就绪" if hik_lib.is_loaded else "未加载"
-        dh_status = "已就绪" if dh_lib.is_loaded else "未加载"
-        sdk_status_str = f"海康SDK: {hik_status} | 大华SDK: {dh_status} ({os_label})"
-        self.lbl_sdk_status = QLabel(sdk_status_str, top_bar)
-        sdk_color = "#3fb950" if (hik_lib.is_loaded or dh_lib.is_loaded) else "#e3b341"
-        self.lbl_sdk_status.setStyleSheet(f"color: {sdk_color}; font-size: 12px; font-weight: 500;")
-        top_layout.addWidget(self.lbl_sdk_status)
-
-        top_layout.addSpacing(16)
-
         # Clock
         self.lbl_clock = QLabel("", top_bar)
         self.lbl_clock.setStyleSheet("color: #8b949e; font-size: 13px; font-family: monospace;")
