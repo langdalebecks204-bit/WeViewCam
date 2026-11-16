@@ -462,24 +462,49 @@ class DeviceManager:
         return data
 
     def export_devices(self, target_path: str, device_ids: Optional[List[str]] = None) -> bool:
-        """Export specified (or all) configured devices to a JSON backup file."""
+        """Export specified (or all) configured devices to JSON, CSV, or Excel file."""
         try:
             dir_name = os.path.dirname(target_path)
             if dir_name:
                 os.makedirs(dir_name, exist_ok=True)
             data = self.get_devices_export_data(device_ids=device_ids)
-            with open(target_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            logger.info(f"已成功导出 {len(data)} 台设备配置到 {target_path}")
-            return True
+
+            ext = os.path.splitext(target_path)[1].lower()
+            if ext in (".xlsx", ".xlsm"):
+                from core.device_excel_helper import DeviceExcelHelper
+                ok = DeviceExcelHelper.export_devices_to_excel(target_path, data)
+                if ok:
+                    logger.info(f"已成功导出 {len(data)} 台设备配置到 Excel: {target_path}")
+                return ok
+            elif ext == ".csv":
+                from core.device_excel_helper import DeviceExcelHelper
+                ok = DeviceExcelHelper.export_devices_to_csv(target_path, data)
+                if ok:
+                    logger.info(f"已成功导出 {len(data)} 台设备配置到 CSV: {target_path}")
+                return ok
+            else:
+                with open(target_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                logger.info(f"已成功导出 {len(data)} 台设备配置到 JSON: {target_path}")
+                return True
         except Exception as e:
             logger.error(f"导出设备配置失败: {e}")
             return False
 
     def import_devices(self, source_path: str, overwrite: bool = False) -> Tuple[bool, str, int]:
-        """Import devices from a backup JSON file with robust empty/BOM/encoding checks."""
+        """Import devices from a backup JSON, Excel (.xlsx), or CSV file with robust checks."""
         if not os.path.exists(source_path):
             return False, f"文件不存在: {source_path}", 0
+
+        ext = os.path.splitext(source_path)[1].lower()
+        if ext in (".xlsx", ".xlsm", ".csv"):
+            try:
+                from core.device_excel_helper import DeviceExcelHelper
+                raw_list = DeviceExcelHelper.parse_table_file(source_path)
+                return self.import_devices_from_list(raw_list, overwrite=overwrite)
+            except Exception as e:
+                logger.error(f"解析表格文件 ({source_path}) 失败: {e}")
+                return False, f"解析表格失败: {str(e)}", 0
 
         try:
             file_size = os.path.getsize(source_path)
@@ -489,7 +514,7 @@ class DeviceManager:
                     "【排查提示】：\n"
                     "1. 若此文件通过微信/QQ等传输，请先在聊天窗口点击该文件完成【下载】或【另存为】到电脑（未下载时本地仅为 0 字节占位符）。\n"
                     "2. 若通过 USB 传输，请确认文件在电脑上已拷贝完整。\n"
-                    "3. 您也可以在 Android 端选择【复制配置到剪贴板】，并在 Ubuntu 端使用【从剪贴板导入】。"
+                    "3. 您也可以在 Android 端选择【复制配置到剪贴板】，并在电脑端使用【从剪贴板导入】。"
                 ), 0
 
             with open(source_path, "rb") as f:
@@ -540,8 +565,12 @@ class DeviceManager:
         else:
             return False, "无效的配置文件格式，顶层结构必须为列表或包含 devices 的字典", 0
 
+        return self.import_devices_from_list(raw_list, overwrite=overwrite)
+
+    def import_devices_from_list(self, raw_list: List[Dict[str, Any]], overwrite: bool = False) -> Tuple[bool, str, int]:
+        """Core worker to import devices from a standardized list of dicts."""
         if not raw_list:
-            return False, "配置文件中没有检测到任何设备数据", 0
+            return False, "导入数据中没有检测到任何设备", 0
 
         try:
             if overwrite:

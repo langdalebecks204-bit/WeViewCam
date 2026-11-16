@@ -687,19 +687,19 @@ class DeviceTreeWidget(QWidget):
             return
 
         # Export to file
-        default_name = "weviewcam_devices_backup.json"
+        default_name = "weviewcam_devices_backup.xlsx"
         if len(selected_ids) == 1:
             dev = self.device_manager.get_device(selected_ids[0])
             if dev and dev.name:
                 safe_name = "".join(c for c in dev.name if c.isalnum() or c in ("-", "_", " ")).strip()
                 if safe_name:
-                    default_name = f"weviewcam_backup_{safe_name}.json"
+                    default_name = f"weviewcam_backup_{safe_name}.xlsx"
 
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, selected_filter = QFileDialog.getSaveFileName(
             self,
             "导出设备配置备份",
             default_name,
-            "JSON 文件 (*.json);;所有文件 (*.*)"
+            "Excel 表格 (*.xlsx);;CSV 文本表格 (*.csv);;JSON 文件 (*.json);;所有文件 (*.*)"
         )
         if not file_path:
             return
@@ -714,15 +714,52 @@ class DeviceTreeWidget(QWidget):
         else:
             QMessageBox.critical(self, "导出失败", "导出设备配置文件时发生错误，请查看运行日志")
 
+    def on_download_template_clicked(self):
+        """Allow users to download standard Excel/CSV batch import templates."""
+        from core.device_excel_helper import DeviceExcelHelper
+        default_path = "weviewcam_import_template.xlsx"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存批量导入模板",
+            default_path,
+            "Excel 工作簿 (*.xlsx);;CSV 表格 (*.csv);;所有文件 (*.*)"
+        )
+        if not file_path:
+            return
+
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == ".csv":
+            ok = DeviceExcelHelper.generate_template_csv(file_path)
+        else:
+            ok = DeviceExcelHelper.generate_template_excel(file_path)
+
+        if ok:
+            QMessageBox.information(
+                self,
+                "模板下载成功",
+                f"已生成标准批量导入模板文件:\n{file_path}\n\n"
+                f"【填写建议】:\n"
+                f"1. 打开表格按照样例填写设备 IP、端口、账号、密码及通道。\n"
+                f"2. 若未知通道号可留空，系统连接后自动探测拉取。\n"
+                f"3. 填写完成后，点击【📥 批量导入设备】选择该文件即可批量上线！"
+            )
+        else:
+            QMessageBox.warning(self, "下载失败", "生成导入模板失败，请检查保存路径权限。")
+
     def on_import_clicked(self):
         """Handle import devices action."""
         from PyQt5.QtWidgets import QFileDialog, QMessageBox, QMenu
         menu = QMenu(self)
         menu.setStyleSheet("QMenu { background-color: #21262d; border: 1px solid #30363d; color: #c9d1d9; }")
-        act_file = menu.addAction("📁 选择本地备份文件 (.json)")
+        act_file = menu.addAction("📁 导入表格/备份文件 (.xlsx / .csv / .json)")
         act_clip = menu.addAction("📋 从剪贴板粘贴配置导入")
+        act_template = menu.addAction("📥 下载标准批量导入模板 (Excel / CSV)...")
         chosen = menu.exec_(self.btn_import.mapToGlobal(self.btn_import.rect().bottomLeft()))
         if not chosen:
+            return
+
+        if chosen == act_template:
+            self.on_download_template_clicked()
             return
 
         if chosen == act_clip:
@@ -731,9 +768,9 @@ class DeviceTreeWidget(QWidget):
 
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "选择要导入的设备配置备份",
+            "选择要导入的设备配置或表格",
             "",
-            "JSON 文件 (*.json);;所有文件 (*.*)"
+            "所有支持文件 (*.xlsx *.csv *.json);;Excel 表格 (*.xlsx);;CSV 文本表格 (*.csv);;JSON 文件 (*.json);;所有文件 (*.*)"
         )
         if not file_path:
             return

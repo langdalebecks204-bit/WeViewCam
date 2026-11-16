@@ -6,3 +6,4 @@ zeep>=4.2.1
 python-vlc>=3.0.18105
 opencv-python>=4.5.0
 pywin32>=306
+openpyxl>=3.0.0

@@ -21,7 +21,7 @@ class FlushStreamHandler(logging.StreamHandler):
         except RecursionError:
             raise
         except Exception:
-            self.handleError(record)
+            pass
 
 
 class FlushFileHandler(logging.FileHandler):
@@ -33,7 +33,7 @@ class FlushFileHandler(logging.FileHandler):
         except RecursionError:
             raise
         except Exception:
-            self.handleError(record)
+            pass
 
 
 def setup_logger(log_dir: str = "logs", log_level: int = logging.INFO) -> logging.Logger:
@@ -65,9 +65,13 @@ def setup_logger(log_dir: str = "logs", log_level: int = logging.INFO) -> loggin
     )
 
     # Console handler (auto flush)
-    console_handler = FlushStreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    if sys.stdout is not None:
+        try:
+            console_handler = FlushStreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
+        except Exception:
+            pass
 
     # File handler (auto flush)
     try:
@@ -75,7 +79,11 @@ def setup_logger(log_dir: str = "logs", log_level: int = logging.INFO) -> loggin
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except Exception as e:
-        print(f"[Warning] Failed to initialize file logger: {e}", file=sys.stderr)
+        if sys.stderr is not None:
+            try:
+                print(f"[Warning] Failed to initialize file logger: {e}", file=sys.stderr)
+            except Exception:
+                pass
 
     _LOGGER_INITIALIZED = True
     return logger

@@ -29,7 +29,7 @@ class LiveViewWidget(QWidget):
         super().__init__(parent)
         self.player_controller = player_controller
 
-        self.max_slots = 16
+        self.max_slots = 32
         self.video_slots: List[VideoWidget] = []
         self.active_slot_id = 0
         self.current_layout_count = 4  # Default 4-split (2x2)
@@ -70,6 +70,14 @@ class LiveViewWidget(QWidget):
         self.btn_16_split = QPushButton("16 画面", top_bar)
         self.btn_16_split.clicked.connect(lambda: self.switch_layout(16))
         top_layout.addWidget(self.btn_16_split)
+
+        self.btn_25_split = QPushButton("25 画面", top_bar)
+        self.btn_25_split.clicked.connect(lambda: self.switch_layout(25))
+        top_layout.addWidget(self.btn_25_split)
+
+        self.btn_32_split = QPushButton("32 画面", top_bar)
+        self.btn_32_split.clicked.connect(lambda: self.switch_layout(32))
+        top_layout.addWidget(self.btn_32_split)
 
         top_layout.addSpacing(16)
 
@@ -271,9 +279,15 @@ class LiveViewWidget(QWidget):
         self.ptz_panel.setVisible(checked)
 
     def switch_layout(self, count: int):
-        """Switch grid layout: 1, 4, 9, or 16 screens."""
+        """Switch grid layout: 1, 4, 9, 16, 25, or 32 screens."""
         self.current_layout_count = count
         self.is_single_maximized = False
+
+        # In 25 or 32 screen split mode, automatically hide PTZ panel to maximize viewing area
+        if count >= 25:
+            if hasattr(self, "btn_ptz_toggle") and hasattr(self, "ptz_panel"):
+                self.btn_ptz_toggle.setChecked(False)
+                self.ptz_panel.setVisible(False)
 
         # Remove all slots from grid layout without detaching their parent
         for slot in self.video_slots:
@@ -286,6 +300,12 @@ class LiveViewWidget(QWidget):
             rows, cols = 2, 2
         elif count == 9:
             rows, cols = 3, 3
+        elif count == 16:
+            rows, cols = 4, 4
+        elif count == 25:
+            rows, cols = 5, 5
+        elif count == 32:
+            rows, cols = 4, 8  # 4 rows x 8 cols optimal for 16:9 widescreen
         else:
             rows, cols = 4, 4
 
