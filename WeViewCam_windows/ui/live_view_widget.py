@@ -289,44 +289,50 @@ class LiveViewWidget(QWidget):
                 self.btn_ptz_toggle.setChecked(False)
                 self.ptz_panel.setVisible(False)
 
-        # Remove all slots from grid layout without detaching their parent
-        for slot in self.video_slots:
-            self.grid_layout.removeWidget(slot)
-            slot.setVisible(False)
+        # Freeze widget updates during relayout to prevent step-by-step visual jumps
+        self.grid_container.setUpdatesEnabled(False)
+        try:
+            # Remove all slots from grid layout without detaching their parent
+            for slot in self.video_slots:
+                self.grid_layout.removeWidget(slot)
+                slot.setVisible(False)
 
-        if count == 1:
-            rows, cols = 1, 1
-        elif count == 4:
-            rows, cols = 2, 2
-        elif count == 9:
-            rows, cols = 3, 3
-        elif count == 16:
-            rows, cols = 4, 4
-        elif count == 25:
-            rows, cols = 5, 5
-        elif count == 32:
-            rows, cols = 4, 8  # 4 rows x 8 cols optimal for 16:9 widescreen
-        else:
-            rows, cols = 4, 4
+            if count == 1:
+                rows, cols = 1, 1
+            elif count == 4:
+                rows, cols = 2, 2
+            elif count == 9:
+                rows, cols = 3, 3
+            elif count == 16:
+                rows, cols = 4, 4
+            elif count == 25:
+                rows, cols = 5, 5
+            elif count == 32:
+                rows, cols = 4, 8  # 4 rows x 8 cols optimal for 16:9 widescreen
+            else:
+                rows, cols = 4, 4
 
-        for i in range(count):
-            r = i // cols
-            c = i % cols
-            slot = self.video_slots[i]
-            self.grid_layout.addWidget(slot, r, c)
-            slot.setVisible(True)
+            for i in range(count):
+                r = i // cols
+                c = i % cols
+                slot = self.video_slots[i]
+                self.grid_layout.addWidget(slot, r, c)
+                slot.setVisible(True)
 
-        # Ensure active slot is within range
-        if self.active_slot_id >= count:
-            self.select_slot(0)
-        else:
-            self.select_slot(self.active_slot_id)
+            # Ensure active slot is within range
+            if self.active_slot_id >= count:
+                self.select_slot(0)
+            else:
+                self.select_slot(self.active_slot_id)
 
-        # Refresh idle slots to clean away any leftover screen artifacts
-        for i in range(count):
-            slot = self.video_slots[i]
-            if not getattr(slot, "is_playing", False):
-                slot.refresh_idle_surface()
+            # Refresh idle slots to clean away any leftover screen artifacts
+            for i in range(count):
+                slot = self.video_slots[i]
+                if not getattr(slot, "is_playing", False):
+                    slot.refresh_idle_surface()
+        finally:
+            # Re-enable updates and render whole grid in one atomic frame
+            self.grid_container.setUpdatesEnabled(True)
 
         # Notify SDK after layout finishes resizing X11 surfaces
         QTimer.singleShot(60, lambda: self._refresh_active_slots(count))
