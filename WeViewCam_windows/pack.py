@@ -57,11 +57,17 @@ def main():
     print(f"\n正在执行 PyInstaller 原生二进制封装 v{VERSION} ...")
     subprocess.check_call(["pyinstaller", "--noconfirm", spec_file], cwd=base_dir)
 
-    # Step 2: Ensure convenient root files exist in dist/WeViewCam
+    # Step 2: Ensure convenient root files exist in dist/WeViewCam (deduplicate _internal/sdk & strip dev files)
+    internal_sdk = os.path.join(dist_dir, "_internal", "sdk")
+    if os.path.exists(internal_sdk):
+        shutil.rmtree(internal_sdk, ignore_errors=True)
+
     sdk_src = os.path.join(base_dir, "sdk")
     sdk_dst = os.path.join(dist_dir, "sdk")
-    if os.path.exists(sdk_src) and not os.path.exists(sdk_dst):
-        shutil.copytree(sdk_src, sdk_dst, dirs_exist_ok=True)
+    if os.path.exists(sdk_dst):
+        shutil.rmtree(sdk_dst, ignore_errors=True)
+    if os.path.exists(sdk_src):
+        shutil.copytree(sdk_src, sdk_dst, ignore=shutil.ignore_patterns("play.pdb", "*.lib", "*.h"))
 
     for f in ["icon.ico", "icon.png", "README.md"]:
         src_f = os.path.join(base_dir, f)

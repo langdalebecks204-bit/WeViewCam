@@ -21,7 +21,7 @@ LATEST_PKG_NAME = "weviewcam_ubuntu.tar.gz"
 
 EXCLUDE_DIRS = {
     ".venv", "venv", "__pycache__", ".pytest_cache", ".git", ".idea", ".vscode",
-    "logs", "dist", "build", "HCNetSDKV6.1.11.30", "win64"
+    "logs", "dist", "build", "HCNetSDKV6.1.11.30", "win64", "_"
 }
 
 EXCLUDE_EXTENSIONS = {
