@@ -1317,7 +1317,7 @@ class HikvisionNativeDriver:
 
         ret = False
         try:
-            # 1. First notify HCNetSDK: NET_DVR_ChangeWndResolution
+            # 1. Notify HCNetSDK: NET_DVR_ChangeWndResolution
             if hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_ChangeWndResolution"):
                 try:
                     c_ret = self.sdk_lib.hcnetsdk.NET_DVR_ChangeWndResolution(play_handle)
@@ -1327,26 +1327,21 @@ class HikvisionNativeDriver:
                 except Exception as e:
                     logger.debug(f"NET_DVR_ChangeWndResolution 调用异常: {e}")
 
-            # 2. Get PlayM4 port and notify PlayCtrl directly
+            # 2. Get PlayM4 port and notify PlayCtrl to adapt resolution
+            # NOTE: Never call PlayM4_SetVideoWindow or PlayM4_RefreshPlay/NET_DVR_RefreshPlay here,
+            # as they destroy and re-create the D3D/DirectDraw backbuffer and trigger WM_PAINT loops,
+            # causing non-stop video surface flickering.
             if hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_GetRealPlayerIndex") and hasattr(self.sdk_lib, "playctrl") and self.sdk_lib.playctrl:
                 try:
                     port = self.sdk_lib.hcnetsdk.NET_DVR_GetRealPlayerIndex(play_handle)
                     if port >= 0:
                         if hasattr(self.sdk_lib.playctrl, "PlayM4_WndResolutionChange"):
                             self.sdk_lib.playctrl.PlayM4_WndResolutionChange(port)
-                        if win_id > 0 and hasattr(self.sdk_lib.playctrl, "PlayM4_SetVideoWindow"):
-                            self.sdk_lib.playctrl.PlayM4_SetVideoWindow(port, 0, win_id)
-                        if hasattr(self.sdk_lib.playctrl, "PlayM4_RefreshPlay"):
-                            self.sdk_lib.playctrl.PlayM4_RefreshPlay(port)
                         ret = True
                 except Exception as e:
                     logger.debug(f"PlayCtrl WndResolutionChange 异常: {e}")
-
-            # 3. Call NET_DVR_RefreshPlay as repaint fallback
-            if hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_RefreshPlay"):
-                self.sdk_lib.hcnetsdk.NET_DVR_RefreshPlay(play_handle)
         except Exception as e:
-            logger.debug(f"NET_DVR_RefreshPlay 异常: {e}")
+            logger.debug(f"refresh_play 异常: {e}")
         return ret
 
     def refresh_playback(self, playback_handle: int, win_id: int = 0) -> bool:

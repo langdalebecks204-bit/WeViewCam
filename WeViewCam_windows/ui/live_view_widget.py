@@ -297,56 +297,50 @@ class LiveViewWidget(QWidget):
                 self.combo_stream.setCurrentIndex(sub_idx)
             self.combo_stream.blockSignals(False)
 
-        # Freeze widget updates during relayout to prevent step-by-step visual jumps
-        self.grid_container.setUpdatesEnabled(False)
-        try:
-            # Remove all slots from grid layout without detaching their parent
-            for slot in self.video_slots:
-                self.grid_layout.removeWidget(slot)
-                slot.setVisible(False)
+        if count == 1:
+            rows, cols = 1, 1
+        elif count == 4:
+            rows, cols = 2, 2
+        elif count == 9:
+            rows, cols = 3, 3
+        elif count == 16:
+            rows, cols = 4, 4
+        elif count == 25:
+            rows, cols = 5, 5
+        elif count == 32:
+            rows, cols = 4, 8  # 4 rows x 8 cols optimal for 16:9 widescreen
+        else:
+            rows, cols = 4, 4
 
-            if count == 1:
-                rows, cols = 1, 1
-            elif count == 4:
-                rows, cols = 2, 2
-            elif count == 9:
-                rows, cols = 3, 3
-            elif count == 16:
-                rows, cols = 4, 4
-            elif count == 25:
-                rows, cols = 5, 5
-            elif count == 32:
-                rows, cols = 4, 8  # 4 rows x 8 cols optimal for 16:9 widescreen
-            else:
-                rows, cols = 4, 4
+        # 1. Hide only slots outside the new count (never hide active visible slots to prevent tearing/flickering)
+        for i in range(count, len(self.video_slots)):
+            slot = self.video_slots[i]
+            self.grid_layout.removeWidget(slot)
+            slot.setVisible(False)
 
-            for i in range(count):
-                r = i // cols
-                c = i % cols
-                slot = self.video_slots[i]
-                self.grid_layout.addWidget(slot, r, c)
+        # 2. Position the required slots in the grid layout
+        for i in range(count):
+            r = i // cols
+            c = i % cols
+            slot = self.video_slots[i]
+            self.grid_layout.addWidget(slot, r, c)
+            if not slot.isVisible():
                 slot.setVisible(True)
 
-            # Ensure active slot is within range
-            if self.active_slot_id >= count:
-                self.select_slot(0)
-            else:
-                self.select_slot(self.active_slot_id)
+        # Ensure active slot is within range
+        if self.active_slot_id >= count:
+            self.select_slot(0)
+        else:
+            self.select_slot(self.active_slot_id)
 
-            # Refresh idle slots to clean away any leftover screen artifacts
-            for i in range(count):
-                slot = self.video_slots[i]
-                if not getattr(slot, "is_playing", False):
-                    slot.refresh_idle_surface()
-        finally:
-            # Re-enable updates and render whole grid in one atomic frame
-            self.grid_container.setUpdatesEnabled(True)
+        # Refresh idle slots to clean away any leftover screen artifacts
+        for i in range(count):
+            slot = self.video_slots[i]
+            if not getattr(slot, "is_playing", False):
+                slot.refresh_idle_surface()
 
-        # Notify SDK after layout finishes resizing X11 surfaces
-        QTimer.singleShot(60, lambda: self._refresh_active_slots(count))
-        # If switching to 1-screen, seamlessly reopen slot 0 so it immediately adapts to full-window resolution
-        if count == 1:
-            QTimer.singleShot(80, lambda: self._reopen_slot_if_playing(0))
+        # Notify SDK after layout finishes resizing surfaces (debounced)
+        QTimer.singleShot(100, lambda: self._refresh_active_slots(count))
 
 
     def select_slot(self, slot_id: int):
@@ -461,15 +455,38 @@ class LiveViewWidget(QWidget):
         QTimer.singleShot(60, lambda: self._refresh_active_slots(1 if self.is_single_maximized else self.saved_layout_count))
 
     def _on_slot_resized(self, slot_id: int):
-        """Called when a video slot changes size."""
-        win_id = self.video_slots[slot_id].get_win_id()
-        QTimer.singleShot(80, lambda: self.player_controller.refresh_slot(slot_id, win_id=win_id))
+        """Called when a video slot changes size (debounced to prevent flicker & resize loops)."""
+        slot = self.player_controller.get_slot_state(slot_id)
+        if not (slot and slot.is_live):
+            return
+
+        if not hasattr(self, "_slot_resize_timers"):
+            self._slot_resize_timers = {}
+
+        timer = self._slot_resize_timers.get(slot_id)
+        if timer is not None:
+            timer.stop()
+        else:
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda sid=slot_id: self._do_refresh_slot(sid))
+            self._slot_resize_timers[slot_id] = timer
+
+        timer.start(120)
+
+    def _do_refresh_slot(self, slot_id: int):
+        slot = self.player_controller.get_slot_state(slot_id)
+        if slot and slot.is_live:
+            win_id = self.video_slots[slot_id].get_win_id()
+            self.player_controller.refresh_slot(slot_id, win_id=win_id)
 
     def _refresh_active_slots(self, count: int):
-        """Notify SDK for all currently visible active slots."""
+        """Notify SDK for all currently visible active playing slots."""
         for i in range(count):
-            win_id = self.video_slots[i].get_win_id()
-            self.player_controller.refresh_slot(i, win_id=win_id)
+            slot = self.player_controller.get_slot_state(i)
+            if slot and slot.is_live:
+                win_id = self.video_slots[i].get_win_id()
+                self.player_controller.refresh_slot(i, win_id=win_id)
 
     def _on_slot_close_requested(self, slot_id: int):
         self.player_controller.stop_slot(slot_id)

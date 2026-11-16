@@ -31,16 +31,22 @@ class VideoSurface(QWidget):
         # Connect thread-safe frame delivery signal to GUI thread slot
         self.frame_ready.connect(self._on_frame_received, Qt.QueuedConnection)
 
-        # Native window for SDK direct hardware rendering (X11 Window ID)
+        # Native window for SDK direct hardware rendering (Win32 / X11 Window ID)
         self.setAttribute(Qt.WA_NativeWindow, True)
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WA_OpaquePaintEvent, True)
         self.setStyleSheet("background-color: #0a0c10;")
+        self._win_id = int(self.winId())
 
         # Auto register to RtspPlayerManager for software/OpenCV rendering fallback
         try:
             from adapters.onvif.player import RtspPlayerManager
-            RtspPlayerManager.register_window_surface(int(self.winId()), self.update_frame)
+            RtspPlayerManager.register_window_surface(self._win_id, self.update_frame)
         except Exception:
             pass
+
+    def get_win_id(self) -> int:
+        return self._win_id
 
     def _on_frame_received(self, q_img: QImage):
         """Executed strictly in the GUI main thread to safely trigger paint update."""
@@ -57,8 +63,12 @@ class VideoSurface(QWidget):
     def set_playing(self, playing: bool):
         self._is_playing = playing
         self.setAttribute(Qt.WA_OpaquePaintEvent, playing)
-        if not playing:
+        if playing:
+            # Clear background style so Qt does not paint over native hardware video
+            self.setStyleSheet("background-color: transparent;")
+        else:
             self._current_frame = None
+            self.setStyleSheet("background-color: #0a0c10;")
             self.update()
             self.repaint()
 
@@ -187,14 +197,8 @@ class VideoWidget(QFrame):
         main_layout.addWidget(self.bottom_osd)
 
     def get_win_id(self) -> int:
-        """Returns the native X11 window id of the inner video surface."""
-        w_id = int(self.surface.winId())
-        try:
-            from adapters.onvif.player import RtspPlayerManager
-            RtspPlayerManager.register_window_surface(w_id, self.surface.update_frame)
-        except Exception:
-            pass
-        return w_id
+        """Returns the native window id of the inner video surface."""
+        return self.surface.get_win_id()
 
     def set_selected(self, selected: bool):
         """Set visual highlight border."""
@@ -244,10 +248,12 @@ class VideoWidget(QFrame):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if event.size() == event.oldSize():
+            return
         if not self.is_playing:
             self.surface.update()
-            self.surface.repaint()
-        self.resized.emit(self.slot_id)
+        else:
+            self.resized.emit(self.slot_id)
 
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
