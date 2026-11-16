@@ -43,37 +43,66 @@ class DeviceManager:
 
     @staticmethod
     def _merge_channels_preserving_custom(existing_channels: List[ChannelInfo], probed_channels: List[ChannelInfo]) -> List[ChannelInfo]:
-        """Merge newly probed channels while preserving user-customized names and manual disabled state."""
+        """
+        Merge newly probed channels while preserving user-customized names and manual disabled state.
+        Intelligently handles SDK physical channel offset (e.g. Hikvision NVR digital channels 33..64
+        vs user sequence 1..32 in Excel tables).
+        """
         if not existing_channels:
             return probed_channels
+        if not probed_channels:
+            return existing_channels
+
+        # Build exact channel_no lookup
         old_map = {c.channel_no: c for c in existing_channels}
+
+        # Check if user channels are 1-based sequential numbers while probed channels start from an offset (e.g., 33)
+        min_probed_no = min(c.channel_no for c in probed_channels)
+        max_user_no = max(c.channel_no for c in existing_channels)
+
+        # If probed channels start from e.g. 33 (or >= 32) and user channels are small sequence indices (<= len(probed_channels))
+        # Map user sequence index (1..N) to physical probed channel (min_probed_no + (idx - 1))
+        offset_alias_map = {}
+        if min_probed_no > max_user_no:
+            for idx, p_ch in enumerate(probed_channels, start=1):
+                if idx in old_map:
+                    offset_alias_map[p_ch.channel_no] = old_map[idx]
+
         merged = []
         for new_ch in probed_channels:
+            # 1. Match exact channel_no
             old_ch = old_map.pop(new_ch.channel_no, None)
+            # 2. Match offset alias (e.g. user sequence 1 matches probed channel 33)
+            if not old_ch and new_ch.channel_no in offset_alias_map:
+                alias_ch = offset_alias_map[new_ch.channel_no]
+                # Remove from old_map so it won't be appended as orphan
+                old_map.pop(alias_ch.channel_no, None)
+                old_ch = alias_ch
+
             if old_ch:
                 if old_ch.name and old_ch.name.strip():
                     new_ch.name = old_ch.name
 
                 is_unattached = new_ch.extra.get("unattached", False) or not getattr(new_ch, "is_enabled", True)
                 if is_unattached:
-                    # 硬件探测明确是未接入空插槽：强制设为 is_enabled=False 并标记 unattached
                     new_ch.is_enabled = False
                     new_ch.extra["unattached"] = True
                 elif old_ch.extra.get("unattached", False):
-                    # 如果原先是空插槽，但本次探测已接入摄像头，解除 unattached 状态并恢复显示
                     new_ch.is_enabled = True
                     new_ch.extra.pop("unattached", None)
                 elif not getattr(old_ch, "is_enabled", True):
-                    # 既不是未接入空插槽，但用户此前在通道管理中手动停用了该通道，保留用户手动停用设置
                     new_ch.is_enabled = False
                 else:
-                    # 正常接入的摄像头（无论当前在线还是离线故障），均保持启用并显示
                     new_ch.is_enabled = True
 
                 new_ch.is_ptz = getattr(old_ch, "is_ptz", new_ch.is_ptz)
+
             merged.append(new_ch)
+
+        # Append any truly custom/user-added channels that don't collide with probed offset
         for rem_ch in old_map.values():
             merged.append(rem_ch)
+
         merged.sort(key=lambda c: c.channel_no)
         return merged
 
