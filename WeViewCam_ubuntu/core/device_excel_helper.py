@@ -471,6 +471,34 @@ class DeviceExcelHelper:
                 except Exception:
                     pass
 
+            # Support inline channel list summary (e.g. "1:大门, 2:仓库, 3:财务室, 4:出入口" or semicolon separated)
+            raw_summary = DeviceExcelHelper._get_val(row, col_map.get("channels_summary"), default="")
+            if str(raw_summary).strip():
+                items = [it.strip() for it in str(raw_summary).replace("，", ",").replace("；", ",").replace(";", ",").replace("\n", ",").split(",") if it.strip()]
+                for it in items:
+                    if ":" in it:
+                        parts = it.split(":", 1)
+                    elif "：" in it:
+                        parts = it.split("：", 1)
+                    elif "-" in it:
+                        parts = it.split("-", 1)
+                    else:
+                        parts = [it, f"通道 {it}"]
+                    try:
+                        c_no = int(float(parts[0].strip()))
+                        c_nm = parts[1].strip() if len(parts) > 1 else f"通道 {c_no}"
+                        existing_nos = {c["channel_no"] for c in devices_map[group_key]["channels"]}
+                        if c_no not in existing_nos:
+                            devices_map[group_key]["channels"].append({
+                                "channel_no": c_no,
+                                "name": c_nm,
+                                "is_enabled": True,
+                                "is_online": True,
+                                "is_ptz": False
+                            })
+                    except Exception:
+                        pass
+
         return list(devices_map.values())
 
     @staticmethod
@@ -540,6 +568,9 @@ class DeviceExcelHelper:
             elif any(k in name for k in ["通道号", "channel_no", "通道id"]):
                 if "channel_no" not in mapping:
                     mapping["channel_no"] = idx
+            elif any(k in name for k in ["通道明细", "通道列表", "channels_detail", "channels_summary", "通道信息"]):
+                if "channels_summary" not in mapping:
+                    mapping["channels_summary"] = idx
             elif any(k in name for k in ["通道名", "通道名称", "channel_name"]):
                 if "channel_name" not in mapping:
                     mapping["channel_name"] = idx

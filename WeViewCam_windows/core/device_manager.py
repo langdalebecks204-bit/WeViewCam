@@ -42,69 +42,165 @@ class DeviceManager:
         return create_device_adapter(device_info)
 
     @staticmethod
-    def _merge_channels_preserving_custom(existing_channels: List[ChannelInfo], probed_channels: List[ChannelInfo]) -> List[ChannelInfo]:
+    def _is_custom_name(name: Optional[str]) -> bool:
+        """Return True if channel name is user-customized rather than default hardware placeholder."""
+        if not name or not name.strip():
+            return False
+        nm = name.strip()
+        default_prefixes = ("通道 ", "通道", "IP通道", "Camera", "Default Camera", "Ch ", "CH", "ch")
+        for prefix in default_prefixes:
+            if nm.startswith(prefix):
+                rest = nm[len(prefix):].strip()
+                if rest.isdigit() or rest.replace("0", "").isdigit() or not rest:
+                    return False
+        return True
+
+    @classmethod
+    def _deduplicate_channels(cls, channels: List[ChannelInfo]) -> List[ChannelInfo]:
         """
-        Merge newly probed channels while preserving user-customized names and manual disabled state.
-        Intelligently handles SDK physical channel offset (e.g. Hikvision NVR digital channels 33..64
-        vs user sequence 1..32 in Excel tables).
+        Deduplicate channels within a device.
+        Detects if both physical offset channels (e.g. 33..64) and sequential alias channels (1..32)
+        exist concurrently due to past imports. Merges user custom names into physical channels and
+        removes the redundant sequential alias channels.
+        Also removes any duplicate channel_no entries (keeps the one with a customized name).
         """
-        if not existing_channels:
-            return probed_channels
-        if not probed_channels:
-            return existing_channels
+        if not channels:
+            return []
 
-        # Build exact channel_no lookup
-        old_map = {c.channel_no: c for c in existing_channels}
+        # 1. First remove any identical channel_no duplicates
+        by_no: Dict[int, ChannelInfo] = {}
+        for ch in channels:
+            if ch.channel_no not in by_no:
+                by_no[ch.channel_no] = ch
+            else:
+                existing = by_no[ch.channel_no]
+                # If the new one has a customized name, prioritize it
+                if cls._is_custom_name(ch.name):
+                    existing.name = ch.name
+                existing.is_enabled = getattr(ch, "is_enabled", existing.is_enabled)
+                existing.is_ptz = getattr(ch, "is_ptz", existing.is_ptz)
 
-        # Check if user channels are 1-based sequential numbers while probed channels start from an offset (e.g., 33)
-        min_probed_no = min(c.channel_no for c in probed_channels)
-        max_user_no = max(c.channel_no for c in existing_channels)
+        unique_channels = list(by_no.values())
 
-        # If probed channels start from e.g. 33 (or >= 32) and user channels are small sequence indices (<= len(probed_channels))
-        # Map user sequence index (1..N) to physical probed channel (min_probed_no + (idx - 1))
-        offset_alias_map = {}
-        if min_probed_no > max_user_no:
-            for idx, p_ch in enumerate(probed_channels, start=1):
-                if idx in old_map:
-                    offset_alias_map[p_ch.channel_no] = old_map[idx]
+        # 2. Check if we have physical offset channels (>= 32) alongside sequential aliases (1..N)
+        high_channels = [c for c in unique_channels if c.channel_no >= 32]
+        low_channels = [c for c in unique_channels if c.channel_no < 32]
 
-        merged = []
-        for new_ch in probed_channels:
-            # 1. Match exact channel_no
-            old_ch = old_map.pop(new_ch.channel_no, None)
-            # 2. Match offset alias (e.g. user sequence 1 matches probed channel 33)
-            if not old_ch and new_ch.channel_no in offset_alias_map:
-                alias_ch = offset_alias_map[new_ch.channel_no]
-                # Remove from old_map so it won't be appended as orphan
-                old_map.pop(alias_ch.channel_no, None)
-                old_ch = alias_ch
-
-            if old_ch:
-                if old_ch.name and old_ch.name.strip():
-                    new_ch.name = old_ch.name
-
-                is_unattached = new_ch.extra.get("unattached", False) or not getattr(new_ch, "is_enabled", True)
-                if is_unattached:
-                    new_ch.is_enabled = False
-                    new_ch.extra["unattached"] = True
-                elif old_ch.extra.get("unattached", False):
-                    new_ch.is_enabled = True
-                    new_ch.extra.pop("unattached", None)
-                elif not getattr(old_ch, "is_enabled", True):
-                    new_ch.is_enabled = False
+        if high_channels and low_channels:
+            min_high = min(c.channel_no for c in high_channels)
+            high_map = {c.channel_no: c for c in high_channels}
+            cleaned_low = []
+            for low_ch in low_channels:
+                alias_physical_no = min_high + (low_ch.channel_no - 1)
+                if alias_physical_no in high_map:
+                    # It's an alias duplicate of an existing physical channel!
+                    target_ch = high_map[alias_physical_no]
+                    if cls._is_custom_name(low_ch.name):
+                        target_ch.name = low_ch.name
+                    target_ch.is_enabled = getattr(low_ch, "is_enabled", target_ch.is_enabled)
+                    target_ch.is_ptz = getattr(low_ch, "is_ptz", target_ch.is_ptz)
                 else:
-                    new_ch.is_enabled = True
+                    cleaned_low.append(low_ch)
+            unique_channels = high_channels + cleaned_low
 
-                new_ch.is_ptz = getattr(old_ch, "is_ptz", new_ch.is_ptz)
+        unique_channels.sort(key=lambda c: c.channel_no)
+        return unique_channels
 
-            merged.append(new_ch)
+    @classmethod
+    def _merge_channel_lists(
+        cls,
+        existing_channels: List[ChannelInfo],
+        incoming_channels: List[ChannelInfo]
+    ) -> List[ChannelInfo]:
+        """
+        Merge incoming channels into existing channels without duplicating.
+        Handles:
+        1. Exact channel_no matching (updates name, enabled, ptz).
+        2. Offset alias matching (sequential 1..N vs physical 33..33+N-1).
+        3. Truly new channels added.
+        4. Cleans up any existing duplicate channels.
+        """
+        if not incoming_channels:
+            return cls._deduplicate_channels(existing_channels)
+        if not existing_channels:
+            return cls._deduplicate_channels(incoming_channels)
 
-        # Append any truly custom/user-added channels that don't collide with probed offset
-        for rem_ch in old_map.values():
-            merged.append(rem_ch)
+        base_channels = cls._deduplicate_channels(existing_channels)
+        inc_channels = cls._deduplicate_channels(incoming_channels)
 
-        merged.sort(key=lambda c: c.channel_no)
-        return merged
+        min_base = min(c.channel_no for c in base_channels)
+        max_base = max(c.channel_no for c in base_channels)
+        min_inc = min(c.channel_no for c in inc_channels)
+        max_inc = max(c.channel_no for c in inc_channels)
+
+        # Case A: Existing has physical channels (>=32), incoming has sequential (1..N)
+        if min_base >= 32 and max_inc < min_base:
+            base_map = {c.channel_no: c for c in base_channels}
+            for inc_ch in inc_channels:
+                mapped_no = min_base + (inc_ch.channel_no - 1)
+                if mapped_no in base_map:
+                    target = base_map[mapped_no]
+                    if cls._is_custom_name(inc_ch.name):
+                        target.name = inc_ch.name
+                    elif not cls._is_custom_name(target.name) and inc_ch.name:
+                        target.name = inc_ch.name
+                    if not getattr(target, "is_enabled", True):
+                        target.is_enabled = False
+                    else:
+                        target.is_enabled = getattr(inc_ch, "is_enabled", True)
+                    target.is_ptz = getattr(inc_ch, "is_ptz", target.is_ptz)
+                else:
+                    inc_ch.channel_no = mapped_no
+                    base_map[mapped_no] = inc_ch
+            result = list(base_map.values())
+
+        # Case B: Incoming has physical channels (>=32), existing has sequential (1..N)
+        elif min_inc >= 32 and max_base < min_inc:
+            inc_map = {c.channel_no: c for c in inc_channels}
+            for base_ch in base_channels:
+                mapped_no = min_inc + (base_ch.channel_no - 1)
+                if mapped_no in inc_map:
+                    target = inc_map[mapped_no]
+                    if cls._is_custom_name(base_ch.name):
+                        target.name = base_ch.name
+                    elif not cls._is_custom_name(target.name) and base_ch.name:
+                        target.name = base_ch.name
+                    if not getattr(base_ch, "is_enabled", True):
+                        target.is_enabled = False
+                    else:
+                        target.is_enabled = getattr(target, "is_enabled", True)
+                    target.is_ptz = getattr(base_ch, "is_ptz", target.is_ptz)
+            result = list(inc_map.values())
+
+        # Case C: Same numbering scheme (exact channel_no matching)
+        else:
+            base_map = {c.channel_no: c for c in base_channels}
+            for inc_ch in inc_channels:
+                if inc_ch.channel_no in base_map:
+                    target = base_map[inc_ch.channel_no]
+                    if cls._is_custom_name(inc_ch.name):
+                        target.name = inc_ch.name
+                    elif not cls._is_custom_name(target.name) and inc_ch.name:
+                        target.name = inc_ch.name
+                    if not getattr(target, "is_enabled", True):
+                        target.is_enabled = False
+                    else:
+                        target.is_enabled = getattr(inc_ch, "is_enabled", True)
+                    target.is_ptz = getattr(inc_ch, "is_ptz", target.is_ptz)
+                else:
+                    base_map[inc_ch.channel_no] = inc_ch
+            result = list(base_map.values())
+
+        return cls._deduplicate_channels(result)
+
+    @classmethod
+    def _merge_channels_preserving_custom(
+        cls,
+        existing_channels: List[ChannelInfo],
+        probed_channels: List[ChannelInfo]
+    ) -> List[ChannelInfo]:
+        """Backward-compatible entry point for adapter probed channel merging."""
+        return cls._merge_channel_lists(existing_channels, probed_channels)
 
     def add_device(self, device: DeviceInfo, auto_connect: bool = False) -> Tuple[bool, str]:
         """Add a new device and optionally connect."""
@@ -618,7 +714,7 @@ class DeviceManager:
                     password=norm["password"],
                     protocol=norm["protocol"],
                     rtsp_port=norm["rtsp_port"],
-                    channels=norm["channels"],
+                    channels=self._deduplicate_channels(norm["channels"]),
                     is_connected=False,
                     extra=norm["extra"]
                 )
@@ -639,20 +735,13 @@ class DeviceManager:
                     if not dev_obj.channels and existing_dev.channels:
                         dev_obj.channels = existing_dev.channels
                     elif dev_obj.channels and existing_dev.channels:
-                        backup_map = {c.channel_no: c for c in dev_obj.channels}
-                        for exist_ch in existing_dev.channels:
-                            if exist_ch.channel_no in backup_map:
-                                bak_ch = backup_map.pop(exist_ch.channel_no)
-                                if bak_ch.name and bak_ch.name.strip():
-                                    exist_ch.name = bak_ch.name
-                                exist_ch.is_enabled = bak_ch.is_enabled
-                                exist_ch.is_ptz = bak_ch.is_ptz
-                        for added_ch in backup_map.values():
-                            added_ch.device_id = existing_id
-                            existing_dev.channels.append(added_ch)
-                        dev_obj.channels = existing_dev.channels
+                        # Smart merge channels without duplicate sequential/physical aliases
+                        dev_obj.channels = self._merge_channel_lists(existing_dev.channels, dev_obj.channels)
+                    elif dev_obj.channels and not existing_dev.channels:
+                        dev_obj.channels = self._deduplicate_channels(dev_obj.channels)
                     self.update_device(dev_obj)
                 else:
+                    dev_obj.channels = self._deduplicate_channels(dev_obj.channels)
                     self.add_device(dev_obj)
 
                 imported_count += 1
@@ -699,7 +788,7 @@ class DeviceManager:
                     password=norm["password"],
                     protocol=norm["protocol"],
                     rtsp_port=norm["rtsp_port"],
-                    channels=norm["channels"],
+                    channels=self._deduplicate_channels(norm["channels"]),
                     is_connected=False,
                     extra=norm["extra"]
                 )
