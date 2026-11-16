@@ -5,6 +5,7 @@ Lists configured devices and their camera channels with quick double-click-to-pl
 """
 
 import logging
+import os
 from typing import Optional, List, Set
 
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QThread, QSettings
