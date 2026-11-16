@@ -289,6 +289,14 @@ class LiveViewWidget(QWidget):
                 self.btn_ptz_toggle.setChecked(False)
                 self.ptz_panel.setVisible(False)
 
+        # For > 16 screens (25 or 32 split), automatically switch default stream selector to sub-stream (fluent)
+        if count > 16 and hasattr(self, "combo_stream"):
+            self.combo_stream.blockSignals(True)
+            sub_idx = self.combo_stream.findData(1)
+            if sub_idx >= 0:
+                self.combo_stream.setCurrentIndex(sub_idx)
+            self.combo_stream.blockSignals(False)
+
         # Freeze widget updates during relayout to prevent step-by-step visual jumps
         self.grid_container.setUpdatesEnabled(False)
         try:
@@ -394,7 +402,18 @@ class LiveViewWidget(QWidget):
         target_slot_id = slot_id if slot_id is not None else self.active_slot_id
         slot_widget = self.video_slots[target_slot_id]
         win_id = slot_widget.get_win_id()
-        stream_type = self.combo_stream.currentData() or 0
+
+        # If current layout is > 16 screens (25 or 32), default to sub-stream (1) for performance
+        if self.current_layout_count > 16:
+            stream_type = 1
+            if hasattr(self, "combo_stream"):
+                self.combo_stream.blockSignals(True)
+                sub_idx = self.combo_stream.findData(1)
+                if sub_idx >= 0:
+                    self.combo_stream.setCurrentIndex(sub_idx)
+                self.combo_stream.blockSignals(False)
+        else:
+            stream_type = self.combo_stream.currentData() or 0
 
         ok = self.player_controller.start_live_play(
             slot_id=target_slot_id,
