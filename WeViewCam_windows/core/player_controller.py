@@ -418,6 +418,20 @@ class PlayerController:
             slot.is_playback = False
             return False
 
+    def get_slot_stats(self, slot_id: int) -> Tuple[Optional[float], Optional[float]]:
+        """Query live or playback stream (fps, bitrate_kbps) for a slot."""
+        slot = self.get_slot_state(slot_id)
+        if not slot.device_id:
+            return (None, None)
+        adapter = self.device_manager.get_adapter(slot.device_id)
+        if not adapter:
+            return (None, None)
+        if slot.is_live and slot.play_handle >= 0:
+            return adapter.get_stream_stats(slot.play_handle, is_playback=False)
+        if slot.is_playback and slot.playback_handle >= 0:
+            return adapter.get_stream_stats(slot.playback_handle, is_playback=True)
+        return (None, None)
+
     def stop_all(self):
         """Stop all playing slots on application exit."""
         for slot_id in list(self._slots.keys()):

@@ -38,6 +38,12 @@ class LiveViewWidget(QWidget):
 
         self._init_ui()
 
+        # 1-second periodic stream stats (FPS & bitrate) updater for active slots
+        self._stats_timer = QTimer(self)
+        self._stats_timer.setInterval(1000)
+        self._stats_timer.timeout.connect(self._update_stream_stats)
+        self._stats_timer.start()
+
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
@@ -487,6 +493,15 @@ class LiveViewWidget(QWidget):
             if slot and slot.is_live:
                 win_id = self.video_slots[i].get_win_id()
                 self.player_controller.refresh_slot(i, win_id=win_id)
+
+    def _update_stream_stats(self):
+        """Refresh FPS and bitrate OSD on all visible active slots."""
+        if not self.isVisible():
+            return
+        for i, slot_widget in enumerate(self.video_slots):
+            if slot_widget.isVisible() and slot_widget.is_playing:
+                fps, bitrate_kbps = self.player_controller.get_slot_stats(i)
+                slot_widget.set_stream_stats(fps, bitrate_kbps)
 
     def _on_slot_close_requested(self, slot_id: int):
         self.player_controller.stop_slot(slot_id)

@@ -38,7 +38,8 @@ from adapters.hikvision.structures import (
     LIGHT_PWRON, WIPER_PWRON,
     ZOOM_IN, ZOOM_OUT, FOCUS_NEAR, FOCUS_FAR, IRIS_OPEN, IRIS_CLOSE,
     TILT_UP, TILT_DOWN, PAN_LEFT, PAN_RIGHT,
-    UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT
+    UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT,
+    REALDATACALLBACK,
 )
 
 # Standard Hikvision Playback Command Constants
@@ -50,7 +51,8 @@ from core.base_adapter import (
     ChannelInfo,
     RecordSegment,
     PTZCommand,
-    PlaybackCommand
+    PlaybackCommand,
+    StreamStatsTracker,
 )
 from core.logger import get_logger
 
@@ -308,6 +310,8 @@ class HikvisionNativeDriver:
 
     def __init__(self):
         self.sdk_lib = HCNetSDKLibrary.get_instance()
+        self._stream_stats: Dict[int, StreamStatsTracker] = {}
+        self._data_callbacks: Dict[int, Any] = {}
 
     @property
     def is_available(self) -> bool:
@@ -652,6 +656,7 @@ class HikvisionNativeDriver:
             return -1
 
         logger.info(f"NET_DVR_RealPlay_V40 启动成功: handle={play_handle}, 通道={channel_no}")
+        self._attach_stats_callback(play_handle, is_playback=False)
         return play_handle
 
     def stop_real_play(self, play_handle: int) -> bool:
@@ -661,6 +666,7 @@ class HikvisionNativeDriver:
         if play_handle < 0:
             return True
 
+        self._detach_stats_callback(play_handle, is_playback=False)
         ret = self.sdk_lib.hcnetsdk.NET_DVR_StopRealPlay(play_handle)
         if not ret:
             err = self.sdk_lib.get_last_error()
@@ -1212,6 +1218,7 @@ class HikvisionNativeDriver:
             0,
             None
         )
+        self._attach_stats_callback(pb_handle, is_playback=True)
 
         return pb_handle
 
@@ -1307,8 +1314,84 @@ class HikvisionNativeDriver:
         if not self.is_available:
             return True
 
+        self._detach_stats_callback(playback_handle, is_playback=True)
         ret = self.sdk_lib.hcnetsdk.NET_DVR_StopPlayBack(playback_handle)
         return bool(ret)
+
+    def _attach_stats_callback(self, handle: int, is_playback: bool = False):
+        """Attach lightweight byte-counting callback for bitrate measurement."""
+        if not self.is_available or handle < 0:
+            return
+        tracker = StreamStatsTracker()
+        self._stream_stats[handle] = tracker
+
+        @REALDATACALLBACK
+        def _on_stream_data(lHandle, dwDataType, pBuffer, dwBufSize, pUser):
+            try:
+                if dwBufSize > 0:
+                    tracker.record_bytes(int(dwBufSize))
+            except BaseException:
+                pass
+
+        self._data_callbacks[handle] = _on_stream_data
+        try:
+            if is_playback:
+                if hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_SetPlayDataCallBack"):
+                    self.sdk_lib.hcnetsdk.NET_DVR_SetPlayDataCallBack(handle, _on_stream_data, 0)
+            else:
+                if hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_SetRealDataCallBack"):
+                    self.sdk_lib.hcnetsdk.NET_DVR_SetRealDataCallBack(handle, _on_stream_data, 0)
+        except Exception as e:
+            logger.debug(f"挂载海康码流统计回调异常: {e}")
+
+    def _detach_stats_callback(self, handle: int, is_playback: bool = False):
+        """Detach stream statistics callback before stopping play/playback."""
+        try:
+            if self.is_available and handle >= 0:
+                if is_playback:
+                    if hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_SetPlayDataCallBack"):
+                        self.sdk_lib.hcnetsdk.NET_DVR_SetPlayDataCallBack(handle, None, 0)
+                else:
+                    if hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_SetRealDataCallBack"):
+                        self.sdk_lib.hcnetsdk.NET_DVR_SetRealDataCallBack(handle, None, 0)
+        except Exception:
+            pass
+        self._stream_stats.pop(handle, None)
+        self._data_callbacks.pop(handle, None)
+
+    def get_stream_stats(self, play_handle: int, is_playback: bool = False) -> Tuple[Optional[float], Optional[float]]:
+        """Return (fps, bitrate_kbps) for an active Hikvision live or playback handle."""
+        if not self.is_available or play_handle < 0:
+            return (None, None)
+
+        tracker = self._stream_stats.get(play_handle)
+        if tracker is None:
+            tracker = StreamStatsTracker()
+            self._stream_stats[play_handle] = tracker
+
+        bitrate_kbps = tracker.sample_bitrate_kbps()
+        fps: Optional[float] = None
+
+        try:
+            port = -1
+            if is_playback and hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_GetPlayBackPlayerIndex"):
+                port = self.sdk_lib.hcnetsdk.NET_DVR_GetPlayBackPlayerIndex(play_handle)
+            elif not is_playback and hasattr(self.sdk_lib.hcnetsdk, "NET_DVR_GetRealPlayerIndex"):
+                port = self.sdk_lib.hcnetsdk.NET_DVR_GetRealPlayerIndex(play_handle)
+
+            if port >= 0 and self.sdk_lib.playctrl:
+                if hasattr(self.sdk_lib.playctrl, "PlayM4_GetPlayedFrames"):
+                    frames = int(self.sdk_lib.playctrl.PlayM4_GetPlayedFrames(port))
+                    if frames >= 0:
+                        fps = tracker.sample_fps_from_total_frames(frames)
+                if (fps is None or fps <= 0) and hasattr(self.sdk_lib.playctrl, "PlayM4_GetCurrentFrameRate"):
+                    nominal_fps = int(self.sdk_lib.playctrl.PlayM4_GetCurrentFrameRate(port))
+                    if 0 < nominal_fps <= 120:
+                        fps = float(nominal_fps)
+        except Exception as e:
+            logger.debug(f"查询海康帧率异常: {e}")
+
+        return (fps, bitrate_kbps)
 
     def refresh_play(self, play_handle: int, win_id: int = 0) -> bool:
         """Notify Hikvision SDK to adapt to new window geometry after resize or maximize."""

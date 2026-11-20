@@ -12,7 +12,7 @@ import shutil
 import zipfile
 import subprocess
 
-VERSION = "0.1.6"
+VERSION = "0.1.7"
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -67,7 +67,17 @@ def main():
     if os.path.exists(sdk_dst):
         shutil.rmtree(sdk_dst, ignore_errors=True)
     if os.path.exists(sdk_src):
-        shutil.copytree(sdk_src, sdk_dst, ignore=shutil.ignore_patterns("play.pdb", "*.lib", "*.h"))
+        def _ignore_sdk_bloat(directory, files):
+            ignored = set()
+            norm_dir = directory.replace("\\", "/").lower()
+            for f in files:
+                if f == "play.pdb" or f.endswith((".lib", ".h")):
+                    ignored.add(f)
+                elif norm_dir.endswith("/vlc/plugins") and f in {"gui", "visualization", "lua", "services_discovery", "stream_out", "access_output", "meta_engine"}:
+                    ignored.add(f)
+            return ignored
+
+        shutil.copytree(sdk_src, sdk_dst, ignore=_ignore_sdk_bloat)
 
     for f in ["icon.ico", "icon.png", "README.md"]:
         src_f = os.path.join(base_dir, f)

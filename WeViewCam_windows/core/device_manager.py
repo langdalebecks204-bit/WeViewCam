@@ -149,6 +149,9 @@ class DeviceManager:
                     else:
                         target.is_enabled = getattr(inc_ch, "is_enabled", True)
                     target.is_ptz = getattr(inc_ch, "is_ptz", target.is_ptz)
+                    target.is_online = getattr(inc_ch, "is_online", target.is_online)
+                    if getattr(inc_ch, "extra", None):
+                        target.extra.update(inc_ch.extra)
                 else:
                     inc_ch.channel_no = mapped_no
                     base_map[mapped_no] = inc_ch
@@ -187,6 +190,9 @@ class DeviceManager:
                     else:
                         target.is_enabled = getattr(inc_ch, "is_enabled", True)
                     target.is_ptz = getattr(inc_ch, "is_ptz", target.is_ptz)
+                    target.is_online = getattr(inc_ch, "is_online", target.is_online)
+                    if getattr(inc_ch, "extra", None):
+                        target.extra.update(inc_ch.extra)
                 else:
                     base_map[inc_ch.channel_no] = inc_ch
             result = list(base_map.values())

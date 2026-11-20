@@ -41,7 +41,8 @@ from core.base_adapter import (
     ChannelInfo,
     RecordSegment,
     PTZCommand,
-    PlaybackCommand
+    PlaybackCommand,
+    StreamStatsTracker,
 )
 from core.logger import get_logger
 
@@ -175,6 +176,7 @@ class DahuaNativeDriver:
         self.sdk_lib = DahuaSDKLibrary.get_instance()
         self._live_sessions: Dict[int, Any] = {}
         self._playback_sessions: Dict[int, Any] = {}
+        self._stream_stats: Dict[int, StreamStatsTracker] = {}
 
     @property
     def is_available(self) -> bool:
@@ -397,8 +399,12 @@ class DahuaNativeDriver:
                     self.sdk_lib.net_client.Play(free_port, int(win_id))
                     play_id = self.sdk_lib.net_client.RealPlayEx(login_id, dh_channel, 0, r_type)
                     if play_id != 0:
+                        tracker = StreamStatsTracker()
+                        self._stream_stats[int(play_id)] = tracker
+
                         def _on_real_data(lRealHandle, dwDataType, pBuffer, dwBufSize, param, dwUser):
                             if pBuffer and dwBufSize > 0:
+                                tracker.record_bytes(int(dwBufSize))
                                 self.sdk_lib.net_client.InputData(free_port, pBuffer, dwBufSize)
 
                         cb_ref = fRealDataCallBackEx2(_on_real_data)
@@ -439,6 +445,7 @@ class DahuaNativeDriver:
         if play_id <= 0:
             return True
 
+        self._stream_stats.pop(int(play_id), None)
         if int(play_id) in self._live_sessions:
             port, cb_ref, is_playsdk = self._live_sessions.pop(int(play_id))
             if is_playsdk and port is not None:
@@ -704,6 +711,7 @@ class DahuaNativeDriver:
         target_hwnd = int(win_id) if win_id > 0 else 0
         pb_port = None
         pb_cb = _dh_playback_data_callback
+        pb_tracker = StreamStatsTracker()
 
         # 优先采用与官方标准对齐的 PlaySDK 硬件加速灌流直出管线 (杜绝窗口子类化与 Qt 消息循环冲突)
         if win_id > 0:
@@ -717,6 +725,7 @@ class DahuaNativeDriver:
                     @CB_FUNCTYPE(ctypes.c_int, C_LLONG, C_DWORD, ctypes.POINTER(ctypes.c_ubyte), C_DWORD, C_LDWORD)
                     def _on_pb_stream_data(lPlayHandle, dwDataType, pBuffer, dwBufSize, dwUser):
                         if pBuffer and dwBufSize > 0 and pb_port is not None:
+                            pb_tracker.record_bytes(int(dwBufSize))
                             self.sdk_lib.net_client.InputData(pb_port, pBuffer, dwBufSize)
                         return 1
 
@@ -821,6 +830,7 @@ class DahuaNativeDriver:
         h_val = int(play_handle)
         _dh_playback_positions[h_val] = 0
         self._playback_sessions[h_val] = (pb_port, pb_cb)
+        self._stream_stats[h_val] = pb_tracker
 
         logger.info(f"大华按时间回放成功启动: handle={h_val}, 通道={channel_no}")
         if sys.stdout and hasattr(sys.stdout, "flush"):
@@ -867,6 +877,7 @@ class DahuaNativeDriver:
         h_val = int(playback_handle)
         _dh_playback_positions.pop(h_val, None)
         _dh_data_cb_counter.pop(h_val, None)
+        self._stream_stats.pop(h_val, None)
 
         if h_val in self._playback_sessions:
             sess = self._playback_sessions.pop(h_val, None)
@@ -910,3 +921,43 @@ class DahuaNativeDriver:
         except Exception as e:
             logger.warning(f"大华抓图接口调用异常: {e}")
             return False
+
+    def get_stream_stats(self, play_handle: int, is_playback: bool = False) -> Tuple[Optional[float], Optional[float]]:
+        """Return (fps, bitrate_kbps) for an active Dahua live or playback handle."""
+        if not self.is_available or play_handle <= 0:
+            return (None, None)
+
+        h_val = int(play_handle)
+        tracker = self._stream_stats.get(h_val)
+        bitrate_kbps = tracker.sample_bitrate_kbps() if tracker else None
+        fps: Optional[float] = None
+
+        port = None
+        if is_playback:
+            sess = self._playback_sessions.get(h_val)
+            if sess and isinstance(sess, tuple):
+                port = sess[0]
+        else:
+            sess = self._live_sessions.get(h_val)
+            if sess and isinstance(sess, tuple):
+                port = sess[0]
+
+        play_sdk = getattr(self.sdk_lib.net_client, "play_sdk", None) if self.sdk_lib.net_client else None
+        if port is not None and play_sdk is not None:
+            if tracker is None:
+                tracker = StreamStatsTracker()
+                self._stream_stats[h_val] = tracker
+            try:
+                port_int = int(port.value) if hasattr(port, "value") else int(port)
+                if hasattr(play_sdk, "PLAY_GetPlayedFrames"):
+                    frames = int(play_sdk.PLAY_GetPlayedFrames(ctypes.c_int(port_int)))
+                    if frames >= 0:
+                        fps = tracker.sample_fps_from_total_frames(frames)
+                if (fps is None or fps <= 0) and hasattr(play_sdk, "PLAY_GetCurrentFrameRate"):
+                    nominal_fps = int(play_sdk.PLAY_GetCurrentFrameRate(ctypes.c_int(port_int)))
+                    if 0 < nominal_fps <= 120:
+                        fps = float(nominal_fps)
+            except Exception as e:
+                logger.debug(f"查询大华帧率异常: {e}")
+
+        return (fps, bitrate_kbps)

@@ -4,11 +4,13 @@ Base device adapter interface.
 Defines abstract contracts for multi-vendor surveillance devices (Hikvision, Dahua, ONVIF).
 """
 
+import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 
 class ProtocolType(str, Enum):
@@ -236,4 +238,83 @@ class BaseDeviceAdapter(ABC):
     def refresh_playback(self, playback_handle: int, win_id: int = 0) -> bool:
         """Notify playback renderer to adapt to new window resolution upon resize."""
         return True
+
+    def get_stream_stats(self, play_handle: int, is_playback: bool = False) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Return (fps, bitrate_kbps) for an active live or playback handle.
+        Values may be None if unavailable on the underlying adapter.
+        """
+        return (None, None)
+
+
+class StreamStatsTracker:
+    """Thread-safe rolling calculator for stream bitrate (kbps) and frame rate (fps)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        now = time.monotonic()
+        self._bytes_accum = 0
+        self._last_bitrate_ts = now
+        self._last_bitrate_kbps: Optional[float] = None
+
+        self._last_total_bytes: Optional[int] = None
+        self._last_frames: Optional[int] = None
+        self._last_fps_ts = now
+        self._last_fps: Optional[float] = None
+
+    def record_bytes(self, num_bytes: int):
+        """Accumulate incoming stream bytes from SDK data callbacks."""
+        if num_bytes <= 0:
+            return
+        with self._lock:
+            self._bytes_accum += num_bytes
+
+    def sample_bitrate_kbps(self) -> Optional[float]:
+        """Compute kbps from accumulated callback bytes since last sample."""
+        now = time.monotonic()
+        with self._lock:
+            dt = now - self._last_bitrate_ts
+            if dt >= 0.4:
+                kbps = (self._bytes_accum * 8.0) / (dt * 1000.0)
+                self._bytes_accum = 0
+                self._last_bitrate_ts = now
+                self._last_bitrate_kbps = kbps
+            return self._last_bitrate_kbps
+
+    def sample_bitrate_from_total_bytes(self, total_bytes: int) -> Optional[float]:
+        """Compute kbps from a monotonically increasing cumulative byte counter (e.g. VLC read_bytes)."""
+        if total_bytes < 0:
+            return self._last_bitrate_kbps
+        now = time.monotonic()
+        with self._lock:
+            if self._last_total_bytes is None or total_bytes < self._last_total_bytes:
+                self._last_total_bytes = total_bytes
+                self._last_bitrate_ts = now
+                return self._last_bitrate_kbps
+            dt = now - self._last_bitrate_ts
+            if dt >= 0.4:
+                delta = total_bytes - self._last_total_bytes
+                self._last_total_bytes = total_bytes
+                self._last_bitrate_ts = now
+                self._last_bitrate_kbps = (delta * 8.0) / (dt * 1000.0)
+            return self._last_bitrate_kbps
+
+    def sample_fps_from_total_frames(self, total_frames: int) -> Optional[float]:
+        """Compute fps from a monotonically increasing cumulative rendered/decoded frame counter."""
+        if total_frames < 0:
+            return self._last_fps
+        now = time.monotonic()
+        with self._lock:
+            if self._last_frames is None or total_frames < self._last_frames:
+                self._last_frames = total_frames
+                self._last_fps_ts = now
+                return self._last_fps
+            dt = now - self._last_fps_ts
+            if dt >= 0.4:
+                delta = total_frames - self._last_frames
+                self._last_frames = total_frames
+                self._last_fps_ts = now
+                self._last_fps = delta / dt
+            return self._last_fps
+
 

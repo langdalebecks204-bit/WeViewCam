@@ -37,6 +37,13 @@ setup_logger()
 logger = get_logger("Main")
 
 
+def global_excepthook(exctype, value, tb):
+    logger.error("Unhandled Python exception:", exc_info=(exctype, value, tb))
+
+
+sys.excepthook = global_excepthook
+
+
 def set_windows_app_id():
     """Set Windows AppUserModelID so the taskbar groups and displays the correct icon."""
     if sys.platform.startswith("win"):

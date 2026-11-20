@@ -240,4 +240,7 @@ class HikvisionAdapter(BaseDeviceAdapter):
     def refresh_playback(self, playback_handle: int, win_id: int = 0) -> bool:
         return self.driver.refresh_playback(playback_handle, win_id=win_id)
 
+    def get_stream_stats(self, play_handle: int, is_playback: bool = False):
+        return self.driver.get_stream_stats(play_handle, is_playback=is_playback)
+
 

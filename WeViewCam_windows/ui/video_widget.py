@@ -6,6 +6,7 @@ Hosts native X11 window surface for direct hardware rendering, OSD overlay, and 
 
 import os
 from datetime import datetime
+from typing import Optional
 from PyQt5.QtCore import Qt, pyqtSignal, QPoint
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel,
@@ -218,11 +219,24 @@ class VideoWidget(QFrame):
         self.title_label.setText(channel_name if channel_name else f"窗口 {self.slot_id + 1}")
         self.status_label.setText(status)
         self.status_label.setStyleSheet("color: #3fb950; font-size: 11px;")
+        self.fps_label.setText("")
         self.surface.set_playing(True)
 
     def set_recording(self, is_recording: bool):
         self._is_recording = is_recording
         self.rec_dot.setVisible(is_recording)
+
+    def set_stream_stats(self, fps: Optional[float], bitrate_kbps: Optional[float]):
+        """Update bottom OSD with live/playback frame rate and bitrate."""
+        parts = []
+        if fps is not None and fps > 0:
+            parts.append(f"{fps:.0f} fps" if fps >= 1.0 else f"{fps:.1f} fps")
+        if bitrate_kbps is not None and bitrate_kbps >= 0:
+            if bitrate_kbps >= 1024.0:
+                parts.append(f"{bitrate_kbps / 1024.0:.2f} Mbps")
+            else:
+                parts.append(f"{bitrate_kbps:.0f} kbps")
+        self.fps_label.setText(" | ".join(parts))
 
     def clear_stream(self):
         self.is_playing = False

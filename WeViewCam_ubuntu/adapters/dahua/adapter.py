@@ -229,3 +229,10 @@ class DahuaAdapter(BaseDeviceAdapter):
 
     def stop_download(self, download_handle: int) -> bool:
         return True
+
+    def get_stream_stats(self, play_handle: int, is_playback: bool = False):
+        if play_handle in self._active_rtsp_playbacks:
+            return self._player_mgr.get_stream_stats(play_handle)
+        if hasattr(self, "_active_rtsp_handles") and play_handle in self._active_rtsp_handles:
+            return self._player_mgr.get_stream_stats(play_handle)
+        return self.driver.get_stream_stats(play_handle, is_playback=is_playback)

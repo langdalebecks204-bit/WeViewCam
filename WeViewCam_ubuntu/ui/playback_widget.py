@@ -449,6 +449,10 @@ class PlaybackWidget(QWidget):
             if pos > 0:
                 self.slider_pos.setValue(pos)
 
+            # Query playback FPS & bitrate for bottom OSD
+            fps, bitrate_kbps = self.player_controller.get_slot_stats(self.playback_slot_id)
+            self.video_slot.set_stream_stats(fps, bitrate_kbps)
+
     def _snapshot(self):
         now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"playback_snap_{now_str}.jpg"
