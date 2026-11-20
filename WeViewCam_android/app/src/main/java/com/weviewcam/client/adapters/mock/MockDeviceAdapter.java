@@ -15,6 +15,7 @@ import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PTZCommand;
 import com.weviewcam.client.core.model.PlaybackCommand;
 import com.weviewcam.client.core.model.RecordSegment;
+import com.weviewcam.client.core.model.StreamStats;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -267,6 +268,14 @@ public class MockDeviceAdapter extends BaseDeviceAdapter {
     public int getPlaybackPos(int playbackHandle) {
         RenderSession session = activeSessions.get(playbackHandle);
         return session != null ? session.progress : 0;
+    }
+
+    @Override
+    public StreamStats getStreamStats(int playHandle, boolean isPlayback) {
+        if (activeSessions.containsKey(playHandle)) {
+            return new StreamStats(25.0, 1024.0);
+        }
+        return new StreamStats(null, null);
     }
 
     @Override

@@ -8,6 +8,7 @@ import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PTZCommand;
 import com.weviewcam.client.core.model.PlaybackCommand;
 import com.weviewcam.client.core.model.RecordSegment;
+import com.weviewcam.client.core.model.StreamStats;
 
 import java.util.Date;
 import java.util.List;
@@ -77,6 +78,13 @@ public abstract class BaseDeviceAdapter {
     public abstract boolean playbackControl(int playbackHandle, PlaybackCommand command, int param);
 
     public abstract int getPlaybackPos(int playbackHandle);
+
+    /**
+     * Query real-time or playback stream statistics (FPS and bitrate in kbps).
+     */
+    public StreamStats getStreamStats(int playHandle, boolean isPlayback) {
+        return new StreamStats(null, null);
+    }
 
     public abstract boolean stopPlayback(int playbackHandle);
 }

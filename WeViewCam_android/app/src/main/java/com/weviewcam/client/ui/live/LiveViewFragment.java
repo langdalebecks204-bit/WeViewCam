@@ -32,6 +32,7 @@ import com.weviewcam.client.core.manager.DeviceManager;
 import com.weviewcam.client.core.model.ChannelInfo;
 import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PTZCommand;
+import com.weviewcam.client.core.model.StreamStats;
 import com.weviewcam.client.ui.MainActivity;
 import com.weviewcam.client.ui.view.PTZControllerView;
 import com.weviewcam.client.ui.view.SurveillanceSurfaceView;
@@ -84,6 +85,14 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
     private DeviceManager deviceManager;
     private final List<ChannelInfo> allChannels = new ArrayList<>();
     private final Map<String, BaseDeviceAdapter> adapterCache = new HashMap<>();
+    private final android.os.Handler statsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable statsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateAllViewportStats();
+            statsHandler.postDelayed(this, 1000);
+        }
+    };
 
     @Nullable
     @Override
@@ -101,6 +110,28 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
         setupListeners();
         loadChannels();
         deviceManager.addOnDeviceChangeListener(deviceChangeListener);
+        statsHandler.removeCallbacks(statsRunnable);
+        statsHandler.postDelayed(statsRunnable, 1000);
+    }
+
+    private void updateAllViewportStats() {
+        for (SurveillanceSurfaceView vp : viewports) {
+            if (vp != null && vp.getVisibility() == View.VISIBLE && vp.getPlayHandle() >= 0 && vp.getChannelInfo() != null) {
+                BaseDeviceAdapter ad = getAdapterForDevice(vp.getChannelInfo().getDeviceId());
+                if (ad != null) {
+                    StreamStats st = ad.getStreamStats(vp.getPlayHandle(), false);
+                    vp.setStreamStats(st.fps, st.bitrateKbps);
+                }
+            }
+        }
+        if (viewportSingle != null && viewportSingle.getVisibility() == View.VISIBLE
+                && viewportSingle.getPlayHandle() >= 0 && viewportSingle.getChannelInfo() != null) {
+            BaseDeviceAdapter ad = getAdapterForDevice(viewportSingle.getChannelInfo().getDeviceId());
+            if (ad != null) {
+                StreamStats st = ad.getStreamStats(viewportSingle.getPlayHandle(), false);
+                viewportSingle.setStreamStats(st.fps, st.bitrateKbps);
+            }
+        }
     }
 
     private final DeviceManager.OnDeviceChangeListener deviceChangeListener = this::loadChannels;
@@ -650,22 +681,17 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
 
     private void startPlayOnViewport(SurveillanceSurfaceView viewport, ChannelInfo ch) {
         if (viewport == null || ch == null) return;
+
+        // Stop previous channel on this viewport BEFORE overwriting channelInfo!
+        stopPlayOnViewport(viewport);
+
         viewport.setChannelInfo(ch);
         if (viewport == activeViewport) {
             updateChannelSelectButton(ch);
         }
 
-        // Stop current play handle if active
-        if (viewport.getPlayHandle() >= 0) {
-            BaseDeviceAdapter oldAdapter = getAdapterForDevice(ch.getDeviceId());
-            if (oldAdapter != null) {
-                oldAdapter.stopRealPlay(viewport.getPlayHandle());
-            }
-            viewport.setPlayHandle(-1);
-        }
-
         viewport.postDelayed(() -> {
-            if (viewport.isSurfaceReady()) {
+            if (viewport.getChannelInfo() == ch && viewport.isSurfaceReady()) {
                 BaseDeviceAdapter adapter = getAdapterForDevice(ch.getDeviceId());
                 if (adapter != null) {
                     int handle = adapter.startRealPlay(ch.getChannelNo(), viewport.getHolder(), currentStreamType);
@@ -904,6 +930,7 @@ public class LiveViewFragment extends Fragment implements MainActivity.FullScree
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        statsHandler.removeCallbacks(statsRunnable);
         if (deviceManager != null) {
             deviceManager.removeOnDeviceChangeListener(deviceChangeListener);
         }

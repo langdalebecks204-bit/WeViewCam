@@ -24,6 +24,7 @@ import com.weviewcam.client.core.model.ChannelInfo;
 import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PlaybackCommand;
 import com.weviewcam.client.core.model.RecordSegment;
+import com.weviewcam.client.core.model.StreamStats;
 import com.weviewcam.client.ui.MainActivity;
 import com.weviewcam.client.ui.live.NvrChannelExpandableAdapter;
 import com.weviewcam.client.ui.view.SurveillanceSurfaceView;
@@ -45,6 +46,17 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     private Button btnSelectDate;
     private Button btnSearchRecords;
     private SurveillanceSurfaceView viewportPlayback;
+    private final android.os.Handler statsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable statsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (viewportPlayback != null && currentAdapter != null && viewportPlayback.getPlayHandle() >= 0) {
+                StreamStats st = currentAdapter.getStreamStats(viewportPlayback.getPlayHandle(), true);
+                viewportPlayback.setStreamStats(st.fps, st.bitrateKbps);
+            }
+            statsHandler.postDelayed(this, 1000);
+        }
+    };
     private TextView tvPlaybackTime;
     private TimelineBarView timelineBar;
     private Button btnAspectRatio;
@@ -93,6 +105,8 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
 
         // Perform initial search for default date
         searchRecords();
+        statsHandler.removeCallbacks(statsRunnable);
+        statsHandler.postDelayed(statsRunnable, 1000);
     }
 
     private void initViews(View root) {
@@ -531,6 +545,7 @@ public class PlaybackFragment extends Fragment implements MainActivity.FullScree
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        statsHandler.removeCallbacks(statsRunnable);
         if (deviceManager != null) {
             deviceManager.removeOnDeviceChangeListener(deviceChangeListener);
         }

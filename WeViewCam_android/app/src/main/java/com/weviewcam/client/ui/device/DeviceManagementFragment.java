@@ -24,9 +24,11 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.weviewcam.client.R;
 import com.weviewcam.client.core.manager.DeviceManager;
 import com.weviewcam.client.core.model.DeviceInfo;
+import com.weviewcam.client.core.util.DeviceExcelHelper;
 import com.weviewcam.client.ui.MainActivity;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -50,6 +52,9 @@ public class DeviceManagementFragment extends Fragment {
     private List<DeviceInfo> pendingExportDevices = null;
 
     private ActivityResultLauncher<String> exportDocumentLauncher;
+    private ActivityResultLauncher<String> exportXlsxLauncher;
+    private ActivityResultLauncher<String> exportCsvLauncher;
+    private ActivityResultLauncher<String> exportTemplateLauncher;
     private ActivityResultLauncher<String[]> importDocumentLauncher;
 
     @Override
@@ -61,6 +66,33 @@ public class DeviceManagementFragment extends Fragment {
                 uri -> {
                     if (uri != null) {
                         writeBackupToUri(uri);
+                    }
+                }
+        );
+
+        exportXlsxLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                uri -> {
+                    if (uri != null) {
+                        writeXlsxToUri(uri, false);
+                    }
+                }
+        );
+
+        exportCsvLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("text/csv"),
+                uri -> {
+                    if (uri != null) {
+                        writeCsvToUri(uri);
+                    }
+                }
+        );
+
+        exportTemplateLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                uri -> {
+                    if (uri != null) {
+                        writeXlsxToUri(uri, true);
                     }
                 }
         );
@@ -115,7 +147,7 @@ public class DeviceManagementFragment extends Fragment {
 
         Button btnImport = view.findViewById(R.id.btn_import_devices);
         if (btnImport != null) {
-            btnImport.setOnClickListener(v -> importDocumentLauncher.launch(new String[]{"application/json", "text/*", "*/*"}));
+            btnImport.setOnClickListener(v -> showImportOptionsDialog());
         }
 
         deviceManager.addOnDeviceChangeListener(deviceChangeListener);
@@ -242,24 +274,35 @@ public class DeviceManagementFragment extends Fragment {
                 ? "备份导出设备 [" + targetDevices.get(0).getName() + "]"
                 : "备份导出 (" + targetDevices.size() + " 台设备)";
 
-        String[] options = new String[]{"保存为本地备份文件 (.json)", "分享备份文件 (微信/QQ/局域网等)", "复制配置 JSON 到剪贴板"};
+        String[] options = new String[]{
+                "导出为 Excel 表格 (.xlsx)",
+                "导出为 CSV 表格 (.csv)",
+                "分享 Excel 表格 (微信/QQ/局域网)",
+                "保存为本地 JSON 备份 (.json)",
+                "分享 JSON 备份文件",
+                "复制配置 JSON 到剪贴板"
+        };
         new AlertDialog.Builder(requireContext())
                 .setTitle(title)
                 .setItems(options, (dialog, which) -> {
+                    String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+                    String prefix = targetDevices.size() == 1
+                            ? "weviewcam_" + targetDevices.get(0).getName().replaceAll("[\\\\/:*?\"<>|\\s]", "_")
+                            : "weviewcam_devices";
                     if (which == 0) {
                         pendingExportDevices = targetDevices;
-                        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-                        String fileName;
-                        if (targetDevices.size() == 1) {
-                            String safeName = targetDevices.get(0).getName().replaceAll("[\\\\/:*?\"<>|\\s]", "_");
-                            fileName = "weviewcam_backup_" + safeName + "_" + timeStamp + ".json";
-                        } else {
-                            fileName = "weviewcam_devices_" + timeStamp + ".json";
-                        }
-                        exportDocumentLauncher.launch(fileName);
+                        exportXlsxLauncher.launch(prefix + "_" + timeStamp + ".xlsx");
                     } else if (which == 1) {
-                        shareBackupFile(targetDevices);
+                        pendingExportDevices = targetDevices;
+                        exportCsvLauncher.launch(prefix + "_" + timeStamp + ".csv");
                     } else if (which == 2) {
+                        shareXlsxFile(targetDevices, false);
+                    } else if (which == 3) {
+                        pendingExportDevices = targetDevices;
+                        exportDocumentLauncher.launch(prefix + "_" + timeStamp + ".json");
+                    } else if (which == 4) {
+                        shareBackupFile(targetDevices);
+                    } else if (which == 5) {
                         copyBackupToClipboard(targetDevices);
                     }
                 })
@@ -348,24 +391,144 @@ public class DeviceManagementFragment extends Fragment {
         }
     }
 
+    private void showImportOptionsDialog() {
+        String[] options = new String[]{
+                "选择文件导入 (.xlsx / .csv / .json)",
+                "保存 Excel 批量导入模板 (.xlsx)",
+                "分享 Excel 导入模板 (微信/QQ)"
+        };
+        new AlertDialog.Builder(requireContext())
+                .setTitle("批量导入与模板")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        importDocumentLauncher.launch(new String[]{
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                "text/csv",
+                                "text/comma-separated-values",
+                                "application/json",
+                                "text/*",
+                                "*/*"
+                        });
+                    } else if (which == 1) {
+                        exportTemplateLauncher.launch("weviewcam_import_template.xlsx");
+                    } else if (which == 2) {
+                        shareXlsxFile(null, true);
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void writeXlsxToUri(Uri uri, boolean isTemplate) {
+        try {
+            List<DeviceInfo> target = pendingExportDevices != null ? pendingExportDevices : deviceList;
+            try (OutputStream os = requireContext().getContentResolver().openOutputStream(uri, "rwt")) {
+                if (os == null) {
+                    throw new java.io.IOException("无法打开目标文件输出流");
+                }
+                if (isTemplate) {
+                    DeviceExcelHelper.generateTemplateXlsx(os);
+                    Toast.makeText(getContext(), "Excel 导入模板已保存", Toast.LENGTH_LONG).show();
+                } else {
+                    DeviceExcelHelper.exportDevicesToXlsx(target, os);
+                    Toast.makeText(getContext(), "已成功导出 " + target.size() + " 台设备到 Excel (.xlsx)", Toast.LENGTH_LONG).show();
+                }
+            }
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "导出 Excel 失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        } finally {
+            pendingExportDevices = null;
+        }
+    }
+
+    private void writeCsvToUri(Uri uri) {
+        try {
+            List<DeviceInfo> target = pendingExportDevices != null ? pendingExportDevices : deviceList;
+            try (OutputStream os = requireContext().getContentResolver().openOutputStream(uri, "rwt")) {
+                if (os == null) {
+                    throw new java.io.IOException("无法打开目标文件输出流");
+                }
+                DeviceExcelHelper.exportDevicesToCsv(target, os);
+            }
+            Toast.makeText(getContext(), "已成功导出 " + target.size() + " 台设备到 CSV", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "导出 CSV 失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        } finally {
+            pendingExportDevices = null;
+        }
+    }
+
+    private void shareXlsxFile(@Nullable List<DeviceInfo> targetDevices, boolean isTemplate) {
+        try {
+            File cacheDir = new File(requireContext().getCacheDir(), "backups");
+            if (!cacheDir.exists() && !cacheDir.mkdirs()) {
+                throw new IllegalStateException("无法创建临时目录");
+            }
+            String fileName = isTemplate ? "weviewcam_import_template.xlsx" : "weviewcam_devices_export.xlsx";
+            File outFile = new File(cacheDir, fileName);
+            try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                if (isTemplate) {
+                    DeviceExcelHelper.generateTemplateXlsx(fos);
+                } else {
+                    DeviceExcelHelper.exportDevicesToXlsx(targetDevices, fos);
+                }
+            }
+            Uri contentUri = FileProvider.getUriForFile(
+                    requireContext(),
+                    requireContext().getPackageName() + ".fileprovider",
+                    outFile
+            );
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, isTemplate ? "WeViewCam 设备导入模板" : "WeViewCam 设备列表 Excel");
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(shareIntent, isTemplate ? "分享导入模板" : "分享 Excel 设备表"));
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "分享失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void readBackupFromUri(Uri uri) {
-        try (InputStream is = requireContext().getContentResolver().openInputStream(uri);
-             BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+        try (InputStream is = requireContext().getContentResolver().openInputStream(uri)) {
+            if (is == null) {
+                throw new java.io.IOException("无法读取文件");
+            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) != -1) {
+                baos.write(buf, 0, n);
+            }
+            byte[] raw = baos.toByteArray();
+
+            List<DeviceInfo> parsed;
+            if (raw.length >= 2 && raw[0] == 'P' && raw[1] == 'K') {
+                // .xlsx ZIP format
+                DeviceExcelHelper.ImportResult res = DeviceExcelHelper.importFromStream(new ByteArrayInputStream(raw));
+                parsed = res.devices;
+            } else {
+                String text = new String(raw, StandardCharsets.UTF_8).trim();
+                if (text.startsWith("\uFEFF")) {
+                    text = text.substring(1).trim();
+                }
+                if (text.startsWith("[") || text.startsWith("{")) {
+                    parsed = deviceManager.parseDevicesJson(text);
+                } else {
+                    // .csv tabular format
+                    DeviceExcelHelper.ImportResult res = DeviceExcelHelper.importFromStream(new ByteArrayInputStream(raw));
+                    parsed = res.devices;
+                }
             }
 
-            List<DeviceInfo> parsed = deviceManager.parseDevicesJson(sb.toString());
             if (parsed == null || parsed.isEmpty()) {
-                Toast.makeText(getContext(), "备份文件中未识别到有效设备配置，请核对格式", Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(), "文件中未识别到有效设备配置，请核对格式 (.xlsx/.csv/.json)", Toast.LENGTH_LONG).show();
                 return;
             }
 
             showImportModeDialog(parsed);
-        } catch (Exception e) {
-            Toast.makeText(getContext(), "读取备份文件失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        } catch (Throwable e) {
+            Toast.makeText(getContext(), "读取导入文件失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -382,9 +545,13 @@ public class DeviceManagementFragment extends Fragment {
     }
 
     private void executeImport(List<DeviceInfo> newDevices, boolean overwriteAll) {
-        int count = deviceManager.importDevices(newDevices, overwriteAll);
-        loadDevices();
-        Toast.makeText(getContext(), "成功导入并生效 " + count + " 台设备", Toast.LENGTH_LONG).show();
+        try {
+            int count = deviceManager.importDevices(newDevices, overwriteAll);
+            loadDevices();
+            Toast.makeText(getContext(), "成功导入并生效 " + count + " 台设备", Toast.LENGTH_LONG).show();
+        } catch (Throwable e) {
+            Toast.makeText(getContext(), "导入设备失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void loadDevices() {
@@ -459,8 +626,8 @@ public class DeviceManagementFragment extends Fragment {
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             DeviceInfo dev = deviceList.get(position);
-            holder.tvName.setText(dev.getName());
-            holder.tvProtocol.setText(dev.getProtocol().getDisplayName());
+            holder.tvName.setText(dev.getName() != null ? dev.getName() : dev.getIp());
+            holder.tvProtocol.setText(dev.getProtocol() != null ? dev.getProtocol().getDisplayName() : "未知协议");
 
             boolean connected = dev.isConnected();
             holder.tvStatus.setText(connected ? "在线" : "未连接");

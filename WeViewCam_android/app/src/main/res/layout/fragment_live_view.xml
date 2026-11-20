@@ -250,12 +250,13 @@
             android:paddingEnd="12dp"
             style="@style/SurveillanceButton" />
 
-        <!-- Floating Fullscreen Toggle Button (Bottom-Right) -->
+        <!-- Floating Fullscreen Toggle Button (Bottom-Right, raised above stream stats OSD) -->
         <Button
             android:id="@+id/btn_fullscreen_floating"
             android:layout_width="wrap_content"
             android:layout_height="30dp"
-            android:layout_margin="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="36dp"
             android:layout_gravity="bottom|end"
             android:text="⛶ 全屏"
             android:textSize="11sp"

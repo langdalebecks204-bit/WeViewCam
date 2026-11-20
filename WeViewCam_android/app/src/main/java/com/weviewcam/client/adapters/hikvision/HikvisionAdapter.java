@@ -16,13 +16,17 @@ import com.hikvision.netsdk.NET_DVR_TIME;
 import com.hikvision.netsdk.NET_DVR_VOD_PARA;
 import com.hikvision.netsdk.NET_DVR_WORKSTATE_V30;
 import com.hikvision.netsdk.PTZCommand;
+import com.hikvision.netsdk.PlaybackCallBack;
 import com.hikvision.netsdk.PlaybackControlCommand;
+import com.hikvision.netsdk.RealDataCallBack;
 import com.weviewcam.client.core.adapter.BaseDeviceAdapter;
 import com.weviewcam.client.core.logger.AppLogger;
 import com.weviewcam.client.core.model.ChannelInfo;
 import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PlaybackCommand;
 import com.weviewcam.client.core.model.RecordSegment;
+import com.weviewcam.client.core.model.StreamStats;
+import com.weviewcam.client.core.util.StreamStatsTracker;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -31,6 +35,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class HikvisionAdapter extends BaseDeviceAdapter {
     private static final String MODULE = "HikvisionAdapter";
@@ -43,6 +48,8 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
 
     private int userId = -1;
     private HCNetSDKByJNA.NET_DVR_DEVICEINFO_V40 deviceInfoV40;
+    private final Map<Integer, StreamStatsTracker> streamStatsMap = new ConcurrentHashMap<>();
+    private final Map<Integer, Object> streamCallbacks = new ConcurrentHashMap<>();
 
     public HikvisionAdapter(DeviceInfo deviceInfo) {
         super(deviceInfo);
@@ -278,6 +285,7 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
                 try {
                     HCNetSDKJNAInstance.getInstance().NET_DVR_OpenSound((short) playHandle);
                 } catch (Throwable ignored) {}
+                attachRealDataStatsCallback(playHandle);
                 AppLogger.i(MODULE, "启动实时预览成功 (SurfaceHolder): handle=" + playHandle + ", ch=" + channelNo);
                 return playHandle;
             } else {
@@ -312,6 +320,7 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
                 try {
                     HCNetSDKJNAInstance.getInstance().NET_DVR_OpenSound((short) playHandle);
                 } catch (Throwable ignored) {}
+                attachRealDataStatsCallback(playHandle);
                 AppLogger.i(MODULE, "启动实时预览成功 (Surface): handle=" + playHandle + ", ch=" + channelNo);
                 return playHandle;
             } else {
@@ -328,6 +337,7 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
     @Override
     public boolean stopRealPlay(int playHandle) {
         if (playHandle < 0) return false;
+        detachStatsCallback(playHandle, false);
         try {
             return HCNetSDK.getInstance().NET_DVR_StopRealPlay(playHandle);
         } catch (Throwable t) {
@@ -540,6 +550,7 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
                 HCNetSDKJNAInstance.getInstance().NET_DVR_OpenSound((short) playbackId);
             } catch (Throwable ignored) {}
 
+            attachPlaybackStatsCallback(playbackId);
             AppLogger.i(MODULE, "录像回放启动成功: playbackId=" + playbackId);
             return playbackId;
         } catch (Throwable t) {
@@ -599,8 +610,73 @@ public class HikvisionAdapter extends BaseDeviceAdapter {
     }
 
     @Override
+    public StreamStats getStreamStats(int playHandle, boolean isPlayback) {
+        if (playHandle < 0) return new StreamStats(null, null);
+        StreamStatsTracker tracker = streamStatsMap.get(playHandle);
+        if (tracker == null) return new StreamStats(null, null);
+        return new StreamStats(tracker.sampleFpsFromRecordedFrames(), tracker.sampleBitrateKbps());
+    }
+
+    private void attachRealDataStatsCallback(int playHandle) {
+        final StreamStatsTracker tracker = new StreamStatsTracker();
+        streamStatsMap.put(playHandle, tracker);
+        try {
+            RealDataCallBack cb = (lRealHandle, dwDataType, pDataBuffer, iDataSize) -> {
+                if (iDataSize > 0) {
+                    tracker.recordBytes(iDataSize);
+                    if (dwDataType == 2 && pDataBuffer != null) {
+                        int packs = StreamStatsTracker.countPsPackHeaders(pDataBuffer, iDataSize);
+                        if (packs > 0) {
+                            tracker.recordFrames(packs);
+                        }
+                    }
+                }
+            };
+            streamCallbacks.put(playHandle, cb);
+            HCNetSDK.getInstance().NET_DVR_SetRealDataCallBack(playHandle, cb);
+        } catch (Throwable t) {
+            AppLogger.w(MODULE, "挂载海康实时码流统计回调异常: " + t.getMessage());
+        }
+    }
+
+    private void attachPlaybackStatsCallback(int playbackHandle) {
+        final StreamStatsTracker tracker = new StreamStatsTracker();
+        streamStatsMap.put(playbackHandle, tracker);
+        try {
+            PlaybackCallBack cb = (lPlayHandle, dwDataType, pDataBuffer, iDataSize) -> {
+                if (iDataSize > 0) {
+                    tracker.recordBytes(iDataSize);
+                    if (dwDataType == 2 && pDataBuffer != null) {
+                        int packs = StreamStatsTracker.countPsPackHeaders(pDataBuffer, iDataSize);
+                        if (packs > 0) {
+                            tracker.recordFrames(packs);
+                        }
+                    }
+                }
+            };
+            streamCallbacks.put(playbackHandle, cb);
+            HCNetSDK.getInstance().NET_DVR_SetPlayDataCallBack(playbackHandle, cb);
+        } catch (Throwable t) {
+            AppLogger.w(MODULE, "挂载海康回放码流统计回调异常: " + t.getMessage());
+        }
+    }
+
+    private void detachStatsCallback(int handle, boolean isPlayback) {
+        streamStatsMap.remove(handle);
+        streamCallbacks.remove(handle);
+        try {
+            if (isPlayback) {
+                HCNetSDK.getInstance().NET_DVR_SetPlayDataCallBack(handle, null);
+            } else {
+                HCNetSDK.getInstance().NET_DVR_SetRealDataCallBack(handle, null);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    @Override
     public boolean stopPlayback(int playbackHandle) {
         if (playbackHandle < 0) return false;
+        detachStatsCallback(playbackHandle, true);
         try {
             return HCNetSDK.getInstance().NET_DVR_StopPlayBack(playbackHandle);
         } catch (Throwable t) {

@@ -37,6 +37,14 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         com.weviewcam.client.core.logger.AppLogger.init(this);
+        final Thread.UncaughtExceptionHandler prevHandler = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            com.weviewcam.client.core.logger.AppLogger.e("CRASH",
+                    "未捕获异常 [" + thread.getName() + "]: " + android.util.Log.getStackTraceString(throwable));
+            if (prevHandler != null) {
+                prevHandler.uncaughtException(thread, throwable);
+            }
+        });
         setContentView(R.layout.activity_main);
 
         appHeader = findViewById(R.id.app_header);

@@ -54,6 +54,7 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
     private View borderView;
     private TextView tvTitle;
     private TextView tvStatus;
+    private TextView tvStats;
 
     private int viewportIndex = -1;
     private ChannelInfo channelInfo;
@@ -122,6 +123,20 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
         osdLayout.addView(tvStatus, statusLp);
 
         addView(osdLayout, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+        // Bottom-right Stream Stats OSD (FPS & Bitrate)
+        tvStats = new TextView(context);
+        tvStats.setTextColor(Color.parseColor("#E6EDF3"));
+        tvStats.setTextSize(11f);
+        tvStats.setPadding(12, 4, 12, 4);
+        tvStats.setBackgroundColor(Color.parseColor("#99000000"));
+        tvStats.setVisibility(View.GONE);
+        tvStats.setClickable(false);
+        tvStats.setFocusable(false);
+        LayoutParams statsLp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        statsLp.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.END;
+        statsLp.setMargins(8, 8, 8, 8);
+        addView(tvStats, statsLp);
 
         gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
             @Override
@@ -261,6 +276,7 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
 
     public void setChannelInfo(ChannelInfo info) {
         this.channelInfo = info;
+        setStreamStats(null, null);
         updateOsdText();
     }
 
@@ -270,7 +286,33 @@ public class SurveillanceSurfaceView extends FrameLayout implements SurfaceHolde
 
     public void setPlayHandle(int handle) {
         this.playHandle = handle;
+        if (handle < 0) {
+            setStreamStats(null, null);
+        }
         updateOsdText();
+    }
+
+    public void setStreamStats(Double fps, Double bitrateKbps) {
+        if (tvStats == null) return;
+        StringBuilder sb = new StringBuilder();
+        if (fps != null && fps > 0) {
+            sb.append(fps >= 1.0 ? String.format(java.util.Locale.US, "%.0f fps", fps) : String.format(java.util.Locale.US, "%.1f fps", fps));
+        }
+        if (bitrateKbps != null && bitrateKbps >= 0) {
+            if (sb.length() > 0) sb.append(" | ");
+            if (bitrateKbps >= 1024.0) {
+                sb.append(String.format(java.util.Locale.US, "%.2f Mbps", bitrateKbps / 1024.0));
+            } else {
+                sb.append(String.format(java.util.Locale.US, "%.0f kbps", bitrateKbps));
+            }
+        }
+        if (sb.length() > 0) {
+            tvStats.setText(sb.toString());
+            tvStats.setVisibility(View.VISIBLE);
+        } else {
+            tvStats.setText("");
+            tvStats.setVisibility(View.GONE);
+        }
     }
 
     private void updateOsdText() {

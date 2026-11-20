@@ -34,6 +34,8 @@ import com.weviewcam.client.core.model.DeviceInfo;
 import com.weviewcam.client.core.model.PTZCommand;
 import com.weviewcam.client.core.model.PlaybackCommand;
 import com.weviewcam.client.core.model.RecordSegment;
+import com.weviewcam.client.core.model.StreamStats;
+import com.weviewcam.client.core.util.StreamStatsTracker;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -66,6 +68,7 @@ public class DahuaAdapter extends BaseDeviceAdapter {
         int playPort;
         CB_fRealDataCallBackEx callback;
         Surface surface;
+        final StreamStatsTracker statsTracker = new StreamStatsTracker();
     }
 
     private static class PlaybackSession {
@@ -76,6 +79,7 @@ public class DahuaAdapter extends BaseDeviceAdapter {
         Surface surface;
         Date startTime;
         Date endTime;
+        final StreamStatsTracker statsTracker = new StreamStatsTracker();
     }
 
     public DahuaAdapter(DeviceInfo deviceInfo) {
@@ -378,23 +382,24 @@ public class DahuaAdapter extends BaseDeviceAdapter {
                 return -1;
             }
 
-            CB_fRealDataCallBackEx dataCb = new CB_fRealDataCallBackEx() {
-                @Override
-                public void invoke(long rHandle, int dataType, byte[] buffer, int bufSize, int param) {
-                    if (dataType == 0 && buffer != null && buffer.length > 0) {
-                        IPlaySDK.PLAYInputData(playPort, buffer, buffer.length);
-                    }
-                }
-            };
-            INetSDK.SetRealDataCallBackEx(realHandle, dataCb, 1);
-
             int sessionKey = SESSION_GEN.incrementAndGet();
             RealSession session = new RealSession();
             session.sessionKey = sessionKey;
             session.realHandle = realHandle;
             session.playPort = playPort;
-            session.callback = dataCb;
             session.surface = surface;
+
+            CB_fRealDataCallBackEx dataCb = new CB_fRealDataCallBackEx() {
+                @Override
+                public void invoke(long rHandle, int dataType, byte[] buffer, int bufSize, int param) {
+                    if (dataType == 0 && buffer != null && buffer.length > 0) {
+                        session.statsTracker.recordBytes(buffer.length);
+                        IPlaySDK.PLAYInputData(playPort, buffer, buffer.length);
+                    }
+                }
+            };
+            INetSDK.SetRealDataCallBackEx(realHandle, dataCb, 1);
+            session.callback = dataCb;
             realSessions.put(sessionKey, session);
 
             AppLogger.i(MODULE, "大华实时预览启动成功: session=" + sessionKey + ", ch=" + channelNo +
@@ -670,11 +675,14 @@ public class DahuaAdapter extends BaseDeviceAdapter {
                 IPlaySDK.PLAYPlaySoundShare(playPort);
             } catch (Throwable ignored) {}
 
+            final PlaybackSession pbSession = new PlaybackSession();
+
             // 3. 注册回放数据接收回调
             CB_fDataCallBack dataCb = new CB_fDataCallBack() {
                 @Override
                 public int invoke(long lRealHandle, int dwDataType, byte[] buffer, int dwBufferSize) {
                     if (dwDataType == 0 && buffer != null && buffer.length > 0) {
+                        pbSession.statsTracker.recordBytes(buffer.length);
                         return IPlaySDK.PLAYInputData(playPort, buffer, buffer.length);
                     }
                     return 1;
@@ -721,7 +729,6 @@ public class DahuaAdapter extends BaseDeviceAdapter {
             } catch (Throwable ignored) {}
 
             int sessionKey = SESSION_GEN.incrementAndGet();
-            PlaybackSession pbSession = new PlaybackSession();
             pbSession.sessionKey = sessionKey;
             pbSession.pbHandle = pbHandle;
             pbSession.playPort = playPort;
@@ -818,6 +825,47 @@ public class DahuaAdapter extends BaseDeviceAdapter {
             }
         } catch (Throwable ignored) {}
         return 0;
+    }
+
+    @Override
+    public StreamStats getStreamStats(int playHandle, boolean isPlayback) {
+        if (playHandle <= 0) return new StreamStats(null, null);
+
+        StreamStatsTracker tracker = null;
+        int port = -1;
+        if (isPlayback) {
+            PlaybackSession pb = playbackSessions.get(playHandle);
+            if (pb != null) {
+                tracker = pb.statsTracker;
+                port = pb.playPort;
+            }
+        } else {
+            RealSession rs = realSessions.get(playHandle);
+            if (rs != null) {
+                tracker = rs.statsTracker;
+                port = rs.playPort;
+            }
+        }
+
+        if (tracker == null) return new StreamStats(null, null);
+
+        Double bitrateKbps = tracker.sampleBitrateKbps();
+        Double fps = null;
+        if (port >= 0) {
+            try {
+                int frames = IPlaySDK.PLAYGetPlayedFrames(port);
+                if (frames >= 0) {
+                    fps = tracker.sampleFpsFromTotalFrames(frames);
+                }
+                if (fps == null || fps <= 0) {
+                    int nominal = IPlaySDK.PLAYGetCurrentFrameRate(port);
+                    if (nominal > 0 && nominal <= 120) {
+                        fps = (double) nominal;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        return new StreamStats(fps, bitrateKbps);
     }
 
     @Override

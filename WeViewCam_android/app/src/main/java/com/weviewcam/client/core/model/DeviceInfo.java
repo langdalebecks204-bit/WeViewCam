@@ -118,7 +118,7 @@ public class DeviceInfo implements Serializable {
     }
 
     public ProtocolType getProtocol() {
-        return protocol;
+        return protocol != null ? protocol : ProtocolType.HIKVISION;
     }
 
     public void setProtocol(ProtocolType protocol) {

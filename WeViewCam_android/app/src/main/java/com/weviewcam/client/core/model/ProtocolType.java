@@ -12,7 +12,7 @@ public enum ProtocolType {
     @SerializedName(value = "dahua", alternate = {"DAHUA"})
     DAHUA("dahua", "大华协议"),
 
-    @SerializedName(value = "custom_rtsp", alternate = {"CUSTOM_RTSP"})
+    @SerializedName(value = "custom_rtsp", alternate = {"CUSTOM_RTSP", "rtsp", "RTSP"})
     CUSTOM_RTSP("custom_rtsp", "自定义 RTSP");
 
     private final String value;

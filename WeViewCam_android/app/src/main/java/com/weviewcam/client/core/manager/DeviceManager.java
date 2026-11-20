@@ -109,6 +109,9 @@ public class DeviceManager {
     }
 
     public static synchronized DeviceManager getInstance(Context context) {
+        if (context != null) {
+            com.weviewcam.client.adapters.onvif.RtspExoPlayerManager.init(context.getApplicationContext());
+        }
         if (instance == null) {
             instance = new DeviceManager(context.getApplicationContext());
         }
@@ -195,18 +198,47 @@ public class DeviceManager {
         if (jsonString == null || jsonString.trim().isEmpty()) {
             return new ArrayList<>();
         }
+        String cleanJson = jsonString.trim();
+        if (cleanJson.startsWith("\uFEFF")) {
+            cleanJson = cleanJson.substring(1).trim();
+        }
         try {
-            JsonElement element = JsonParser.parseString(jsonString);
+            JsonElement element = JsonParser.parseString(cleanJson);
             Type listType = new TypeToken<List<DeviceInfo>>() {}.getType();
+            List<DeviceInfo> parsed = null;
             if (element.isJsonArray()) {
-                return gson.fromJson(element, listType);
+                parsed = gson.fromJson(element, listType);
             } else if (element.isJsonObject()) {
                 JsonObject obj = element.getAsJsonObject();
                 if (obj.has("devices") && obj.get("devices").isJsonArray()) {
-                    return gson.fromJson(obj.get("devices"), listType);
+                    parsed = gson.fromJson(obj.get("devices"), listType);
                 }
             }
-        } catch (Exception e) {
+            if (parsed != null) {
+                List<DeviceInfo> sanitized = new ArrayList<>();
+                for (DeviceInfo dev : parsed) {
+                    if (dev == null) continue;
+                    if (dev.getDeviceId() == null || dev.getDeviceId().trim().isEmpty()) {
+                        dev.setDeviceId(java.util.UUID.randomUUID().toString());
+                    }
+                    if (dev.getProtocol() == null) {
+                        dev.setProtocol(ProtocolType.HIKVISION);
+                    }
+                    List<ChannelInfo> cleanChs = new ArrayList<>();
+                    if (dev.getChannels() != null) {
+                        for (ChannelInfo ch : dev.getChannels()) {
+                            if (ch != null) {
+                                ch.setDeviceId(dev.getDeviceId());
+                                cleanChs.add(ch);
+                            }
+                        }
+                    }
+                    dev.setChannels(cleanChs);
+                    sanitized.add(dev);
+                }
+                return sanitized;
+            }
+        } catch (Throwable e) {
             AppLogger.e(MODULE, "解析设备备份 JSON 失败: " + e.getMessage());
         }
         return new ArrayList<>();
