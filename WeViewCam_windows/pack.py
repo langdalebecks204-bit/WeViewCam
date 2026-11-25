@@ -12,7 +12,7 @@ import shutil
 import zipfile
 import subprocess
 
-VERSION = "0.1.7"
+VERSION = "0.1.8"
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -71,7 +71,8 @@ def main():
             ignored = set()
             norm_dir = directory.replace("\\", "/").lower()
             for f in files:
-                if f == "play.pdb" or f.endswith((".lib", ".h")):
+                low_f = f.lower()
+                if low_f in {"play.pdb", "gdiplus.dll", "msvcr100.dll", "msvcr120.dll", "libcrypto-1_1-x64.dll"} or low_f.endswith((".lib", ".h")):
                     ignored.add(f)
                 elif norm_dir.endswith("/vlc/plugins") and f in {"gui", "visualization", "lua", "services_discovery", "stream_out", "access_output", "meta_engine"}:
                     ignored.add(f)

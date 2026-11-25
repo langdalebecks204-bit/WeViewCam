@@ -24,7 +24,7 @@ logger = get_logger("DeviceManager")
 class DeviceManager:
     """Central registry and controller for all registered surveillance devices."""
 
-    def __init__(self, config_path: str = "config/devices.json"):
+    def __init__(self, config_path: str = "config/devices.json", auto_load: bool = True):
         if not os.path.isabs(config_path):
             if getattr(sys, "frozen", False):
                 base_app = os.path.dirname(sys.executable)
@@ -34,7 +34,8 @@ class DeviceManager:
         self.config_path = config_path
         self._devices: Dict[str, DeviceInfo] = {}
         self._adapters: Dict[str, BaseDeviceAdapter] = {}
-        self.load_devices()
+        if auto_load:
+            self.load_devices()
 
     def create_adapter(self, device_info: DeviceInfo) -> BaseDeviceAdapter:
         """Factory method to instantiate the correct vendor adapter."""

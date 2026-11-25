@@ -41,16 +41,12 @@ if sys.platform.startswith("win"):
                     pass
             break
 
-# 1. Try loading python-vlc
-_HAS_VLC = False
-try:
-    import vlc
-    _HAS_VLC = True
-except (ImportError, OSError) as e:
-    logger.warning(f"未检测到 64 位 libvlc 运行时 ({e})，RTSP 将尝试启用 OpenCV/FFmpeg 软解回退。")
+# 1. Defer python-vlc DLL loading into background VlcInitWorker to keep GUI startup instant
+import importlib.util
+vlc = None
+_HAS_VLC = importlib.util.find_spec("vlc") is not None
 
 # 2. Lazy OpenCV fallback loader (never import cv2 at module load time to avoid Linux Qt xcb plugin conflicts)
-import importlib.util
 _HAS_CV2 = importlib.util.find_spec("cv2") is not None
 cv2 = None
 
@@ -134,7 +130,19 @@ class RtspPlayerManager:
             logger.error("❌ VLC 模块不可用，所有 RTSP 播放将被拒绝。请运行 bash install.sh 安装依赖。")
 
     def _init_vlc_worker(self):
-        """Initialize libvlc instance in background so UI startup is never blocked by plugin scanning."""
+        """Load python-vlc and initialize libvlc instance in background so UI startup is never blocked."""
+        global vlc, _HAS_VLC
+        try:
+            if vlc is None:
+                import vlc as _vlc
+                vlc = _vlc
+        except (ImportError, OSError) as e:
+            logger.warning(f"未检测到 64 位 libvlc 运行时 ({e})，RTSP 将尝试启用 OpenCV/FFmpeg 软解回退。")
+            _HAS_VLC = False
+            self._has_vlc = False
+            self._vlc_init_event.set()
+            return
+
         candidate_args = [
             ["--quiet", "--no-video-title-show"],
             ["--quiet"],

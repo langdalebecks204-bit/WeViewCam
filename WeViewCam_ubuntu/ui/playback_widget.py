@@ -4,13 +4,14 @@ Recording Playback Widget.
 Provides search by device/channel/date, recorded file list, interactive 24h timeline and playback control.
 """
 
+import calendar
 import sys
 import time as py_time
 from datetime import datetime, date, time as dt_time, timedelta
 from typing import List, Optional
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QDate
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QComboBox,
     QPushButton, QDateEdit, QTreeWidget, QTreeWidgetItem,
     QHeaderView, QSplitter, QSlider, QFrame, QMessageBox, QFileDialog,
     QApplication
@@ -24,6 +25,107 @@ from core.logger import get_logger
 from ui.device_tree_widget import icon_online, icon_offline, icon_disconnected
 
 logger = get_logger("PlaybackWidget")
+
+
+class _SafeCalendarPopup(QFrame):
+    """Pure QPushButton calendar popup to avoid PyQt5 QCalendarWidget/QTableView SIGSEGV on Python 3.12."""
+
+    date_selected = pyqtSignal(date)
+
+    def __init__(self, initial_date: date, parent=None):
+        super().__init__(parent, Qt.Popup | Qt.FramelessWindowHint)
+        self.setStyleSheet(
+            "QFrame { background-color: #1e222a; border: 1px solid #30363d; border-radius: 6px; }"
+            "QLabel { color: #e6edf3; border: none; }"
+            "QPushButton { background-color: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 4px; padding: 4px; min-width: 28px; min-height: 24px; }"
+            "QPushButton:hover { background-color: #30363d; }"
+        )
+        self._current_year = initial_date.year
+        self._current_month = initial_date.month
+        self._selected_date = initial_date
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(6)
+
+        header = QHBoxLayout()
+        btn_prev_m = QPushButton("◀", self)
+        btn_prev_m.setFixedWidth(28)
+        btn_prev_m.clicked.connect(lambda: self._shift_month(-1))
+        self.lbl_month = QLabel("", self)
+        self.lbl_month.setAlignment(Qt.AlignCenter)
+        self.lbl_month.setStyleSheet("font-weight: bold; font-size: 13px;")
+        btn_next_m = QPushButton("▶", self)
+        btn_next_m.setFixedWidth(28)
+        btn_next_m.clicked.connect(lambda: self._shift_month(1))
+        header.addWidget(btn_prev_m)
+        header.addWidget(self.lbl_month, 1)
+        header.addWidget(btn_next_m)
+        root.addLayout(header)
+
+        self._grid = QGridLayout()
+        self._grid.setSpacing(3)
+        for col, wname in enumerate(["一", "二", "三", "四", "五", "六", "日"]):
+            lbl = QLabel(wname, self)
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("color: #8b949e; font-size: 11px;")
+            self._grid.addWidget(lbl, 0, col)
+        root.addLayout(self._grid)
+
+        self._day_buttons: List[QPushButton] = []
+        for r in range(1, 7):
+            for c in range(7):
+                btn = QPushButton("", self)
+                btn.setFixedSize(30, 26)
+                self._grid.addWidget(btn, r, c)
+                self._day_buttons.append(btn)
+
+        btn_today = QPushButton("今天", self)
+        btn_today.clicked.connect(lambda: self._pick(date.today()))
+        root.addWidget(btn_today)
+        self._render_month()
+
+    def _shift_month(self, delta: int):
+        m = self._current_month + delta
+        y = self._current_year
+        if m < 1:
+            m = 12
+            y -= 1
+        elif m > 12:
+            m = 1
+            y += 1
+        self._current_year = y
+        self._current_month = m
+        self._render_month()
+
+    def _pick(self, d: date):
+        self.date_selected.emit(d)
+        self.close()
+
+    def _render_month(self):
+        self.lbl_month.setText(f"{self._current_year}年 {self._current_month:02d}月")
+        first_wd, num_days = calendar.monthrange(self._current_year, self._current_month)
+        for idx, btn in enumerate(self._day_buttons):
+            try:
+                btn.clicked.disconnect()
+            except Exception:
+                pass
+            day_num = idx - first_wd + 1
+            if 1 <= day_num <= num_days:
+                d = date(self._current_year, self._current_month, day_num)
+                btn.setText(str(day_num))
+                btn.setEnabled(True)
+                if d == self._selected_date:
+                    btn.setStyleSheet("background-color: #0e78ff; color: white; font-weight: bold; border: 1px solid #3894ff; border-radius: 4px;")
+                elif d == date.today():
+                    btn.setStyleSheet("background-color: #21262d; color: #58a6ff; border: 1px solid #388bfd; border-radius: 4px;")
+                else:
+                    btn.setStyleSheet("")
+                btn.clicked.connect(lambda checked=False, target=d: self._pick(target))
+            else:
+                btn.setText("")
+                btn.setEnabled(False)
+                btn.setStyleSheet("background: transparent; border: none;")
 
 
 class PlaybackWidget(QWidget):
@@ -79,12 +181,31 @@ class PlaybackWidget(QWidget):
         self.combo_channel = QComboBox(left_panel)
         left_layout.addWidget(self.combo_channel)
 
-        # Date picker
+        # Date picker (disable QCalendarWidget/QTableView popup to avoid Python 3.12 PyQt5 SIGSEGV)
         left_layout.addWidget(QLabel("检索日期:", left_panel))
+        date_row = QHBoxLayout()
+        date_row.setSpacing(4)
+        self.btn_prev_date = QPushButton("◀", left_panel)
+        self.btn_prev_date.setFixedWidth(28)
+        self.btn_prev_date.setToolTip("前一天")
+        self.btn_prev_date.clicked.connect(lambda: self._shift_picker_date(-1))
         self.date_picker = QDateEdit(left_panel)
-        self.date_picker.setCalendarPopup(True)
+        self.date_picker.setCalendarPopup(False)
+        self.date_picker.setDisplayFormat("yyyy-MM-dd")
         self.date_picker.setDate(date.today())
-        left_layout.addWidget(self.date_picker)
+        self.btn_next_date = QPushButton("▶", left_panel)
+        self.btn_next_date.setFixedWidth(28)
+        self.btn_next_date.setToolTip("后一天")
+        self.btn_next_date.clicked.connect(lambda: self._shift_picker_date(1))
+        self.btn_date_popup = QPushButton("📅", left_panel)
+        self.btn_date_popup.setFixedWidth(30)
+        self.btn_date_popup.setToolTip("选择日期")
+        self.btn_date_popup.clicked.connect(self._open_safe_calendar)
+        date_row.addWidget(self.btn_prev_date)
+        date_row.addWidget(self.date_picker, 1)
+        date_row.addWidget(self.btn_next_date)
+        date_row.addWidget(self.btn_date_popup)
+        left_layout.addLayout(date_row)
 
         # Search button
         self.btn_search = QPushButton("🔍 检索历史录像", left_panel)
@@ -219,6 +340,19 @@ class PlaybackWidget(QWidget):
         self.play_timer = QTimer(self)
         self.play_timer.setInterval(1000)
         self.play_timer.timeout.connect(self._on_timer_tick)
+
+    def _shift_picker_date(self, days: int):
+        cur = self.date_picker.date().toPyDate()
+        nxt = cur + timedelta(days=days)
+        self.date_picker.setDate(QDate(nxt.year, nxt.month, nxt.day))
+
+    def _open_safe_calendar(self):
+        cur = self.date_picker.date().toPyDate()
+        popup = _SafeCalendarPopup(cur, self)
+        popup.date_selected.connect(lambda d: self.date_picker.setDate(QDate(d.year, d.month, d.day)))
+        pos = self.btn_date_popup.mapToGlobal(self.btn_date_popup.rect().bottomLeft())
+        popup.move(pos)
+        popup.show()
 
     def refresh_devices_combo(self):
         """Update device dropdown from DeviceManager."""

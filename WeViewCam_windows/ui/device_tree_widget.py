@@ -272,20 +272,22 @@ class DeviceTreeWidget(QWidget):
     """Sidebar tree view of surveillance devices and camera channels."""
 
     channel_double_clicked = pyqtSignal(str, int, str)  # device_id, channel_no, channel_name
+    device_double_clicked = pyqtSignal(str)              # device_id
     add_device_requested = pyqtSignal()
     edit_device_requested = pyqtSignal(str)              # device_id
     delete_device_requested = pyqtSignal(str)            # device_id
 
-    def __init__(self, device_manager: DeviceManager, parent=None):
+    def __init__(self, device_manager: DeviceManager, parent=None, defer_load: bool = False):
         super().__init__(parent)
         self.device_manager = device_manager
         self._refresh_worker: Optional[RefreshWorker] = None
-        self._init_ui()
+        self._init_ui(defer_load=defer_load)
         self._init_timer()
-        # 启动时后台自动重新连接设备探测最新通道在线状态
-        QTimer.singleShot(600, self.start_async_refresh)
+        if not defer_load:
+            # 启动后延迟 1.2s 在后台异步探测设备最新通道在线状态，避免阻塞首屏渲染
+            QTimer.singleShot(1200, self.start_async_refresh)
 
-    def _init_ui(self):
+    def _init_ui(self, defer_load: bool = False):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -346,7 +348,11 @@ class DeviceTreeWidget(QWidget):
         self.tree.itemExpanded.connect(self._on_item_expanded)
         layout.addWidget(self.tree)
 
-        self.refresh_devices()
+        if defer_load:
+            placeholder = QTreeWidgetItem(self.tree, ["⏳ 正在加载设备列表..."])
+            placeholder.setFlags(Qt.NoItemFlags)
+        else:
+            self.refresh_devices()
 
     def _init_timer(self):
         settings = QSettings("WeViewCam", "Client")
@@ -502,12 +508,15 @@ class DeviceTreeWidget(QWidget):
                 data["channel_name"]
             )
         elif item_type in ("device", "hint"):
-            # Connect device and expand
+            # Connect device if needed, expand, and emit device_double_clicked for batch live-view loading
             dev_id = data["device_id"]
             dev = self.device_manager.get_device(dev_id)
             if dev and not dev.is_connected:
                 self.device_manager.connect_device(dev_id)
                 self.refresh_devices(expanded_device_id=dev_id)
+                dev = self.device_manager.get_device(dev_id)
+            if dev and (dev.is_connected or dev.channels):
+                self.device_double_clicked.emit(dev_id)
 
     def _show_context_menu(self, pos):
         item = self.tree.itemAt(pos)

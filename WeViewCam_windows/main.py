@@ -31,17 +31,13 @@ if sys.platform.startswith("win"):
     hik_win64 = os.path.join(base_dir, "sdk", "hikvision", "win64")
     for d in [dahua_win64, hik_win64]:
         if os.path.isdir(d):
-            try:
-                ctypes.windll.kernel32.SetDllDirectoryW(d)
-            except Exception:
-                pass
             if hasattr(os, "add_dll_directory"):
                 try:
                     os.add_dll_directory(d)
                 except Exception:
                     pass
             if d not in os.environ.get("PATH", ""):
-                os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+                os.environ["PATH"] = os.environ.get("PATH", "") + os.pathsep + d
 
 # Enable C-level crash trace capture for SIGSEGV, SIGABRT, SIGFPE, SIGILL
 try:
@@ -58,9 +54,9 @@ if sys.platform.startswith("linux"):
     except Exception:
         pass
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
+from PyQt5.QtWidgets import QApplication, QSplashScreen
 
 from core import __version__
 from core.logger import setup_logger, get_logger
@@ -69,8 +65,10 @@ from core.logger import setup_logger, get_logger
 setup_logger()
 logger = get_logger("Main")
 
+
 def global_excepthook(exctype, value, tb):
     logger.error("Unhandled Python exception:", exc_info=(exctype, value, tb))
+
 
 sys.excepthook = global_excepthook
 
@@ -90,15 +88,6 @@ def main():
     logger.info("==================================================")
     logger.info(f"正在启动 WeViewCam 视频监控平台 ({plat_desc}) v{__version__}...")
     logger.info(f"Python 版本: {sys.version.split()[0]} ({sys.platform})")
-    try:
-        from adapters.onvif.player import RtspPlayerManager
-        mgr = RtspPlayerManager.get_instance()
-        if mgr.has_vlc:
-            logger.info("✓ 硬件加速播放引擎: VLC 就绪 (原生 X11 / DirectDraw 直出)")
-        else:
-            logger.error("❌ 硬件加速播放引擎: libvlc 未就绪！请运行 bash install.sh 安装 libvlc-dev 和 vlc")
-    except Exception as ve:
-        logger.error(f"检查 VLC 状态异常: {ve}")
     logger.info("==================================================")
 
     # Set Windows Taskbar App ID
@@ -131,15 +120,49 @@ def main():
             os.path.join(d, "图标.jpg")
         ])
 
+    chosen_icon = None
     for ic in icon_candidates:
         if os.path.exists(ic):
             app.setWindowIcon(QIcon(ic))
+            chosen_icon = ic
             break
+
+    # Show lightweight dark splash immediately so user gets instant visual feedback
+    splash_pix = QPixmap(380, 150)
+    splash_pix.fill(QColor("#0d1117"))
+    painter = QPainter(splash_pix)
+    painter.setPen(QColor("#30363d"))
+    painter.drawRect(0, 0, 379, 149)
+    if chosen_icon:
+        icon_pix = QPixmap(chosen_icon).scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        painter.drawPixmap(28, 51, icon_pix)
+    painter.setPen(QColor("#f0f6fc"))
+    painter.setFont(QFont("Microsoft YaHei", 15, QFont.Bold))
+    painter.drawText(92, 66, "WeViewCam")
+    painter.setPen(QColor("#8b949e"))
+    painter.setFont(QFont("Microsoft YaHei", 9))
+    painter.drawText(92, 94, f"v{__version__} · 正在初始化监控工作台...")
+    painter.end()
+
+    splash = QSplashScreen(splash_pix, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+    splash.show()
+    app.processEvents()
 
     from ui.main_window import MainWindow
 
     main_win = MainWindow()
     main_win.show()
+    splash.finish(main_win)
+
+    # Warm up VLC in background only after main window is visible
+    def _warmup_vlc():
+        try:
+            from adapters.onvif.player import RtspPlayerManager
+            RtspPlayerManager.get_instance()
+        except Exception:
+            pass
+
+    QTimer.singleShot(50, _warmup_vlc)
 
     sys.exit(app.exec_())
 

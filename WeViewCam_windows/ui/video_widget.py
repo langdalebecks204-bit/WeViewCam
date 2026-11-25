@@ -7,7 +7,7 @@ Hosts native X11 window surface for direct hardware rendering, OSD overlay, and 
 import os
 from datetime import datetime
 from typing import Optional
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
 from PyQt5.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QMenu, QWidget, QSizePolicy, QFileDialog, QMessageBox
@@ -39,7 +39,10 @@ class VideoSurface(QWidget):
         self.setStyleSheet("background-color: #0a0c10;")
         self._win_id = int(self.winId())
 
-        # Auto register to RtspPlayerManager for software/OpenCV rendering fallback
+        # Defer RtspPlayerManager import/registration until after initial window paint
+        QTimer.singleShot(150, self._register_surface_callback)
+
+    def _register_surface_callback(self):
         try:
             from adapters.onvif.player import RtspPlayerManager
             RtspPlayerManager.register_window_surface(self._win_id, self.update_frame)

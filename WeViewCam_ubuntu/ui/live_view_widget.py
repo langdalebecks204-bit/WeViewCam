@@ -25,6 +25,8 @@ from core.base_adapter import PTZCommand
 class LiveViewWidget(QWidget):
     """Real-time multi-channel video monitoring view."""
 
+    fullscreen_requested = pyqtSignal()
+
     def __init__(self, player_controller: PlayerController, parent=None):
         super().__init__(parent)
         self.player_controller = player_controller
@@ -48,9 +50,11 @@ class LiveViewWidget(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(4, 4, 4, 4)
         main_layout.setSpacing(4)
+        self._main_layout = main_layout
 
         # 1. Top Control Bar
         top_bar = QFrame(self)
+        self.top_bar = top_bar
         top_bar.setStyleSheet("background-color: #1f232c; border-radius: 4px; padding: 2px;")
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(6, 4, 6, 4)
@@ -134,16 +138,8 @@ class LiveViewWidget(QWidget):
         self.grid_layout.setContentsMargins(0, 0, 0, 0)
         self.grid_layout.setSpacing(2)
 
-        # Pre-create 16 video slot widgets
-        for i in range(self.max_slots):
-            slot = VideoWidget(slot_id=i, parent=self.grid_container)
-            slot.clicked.connect(self._on_slot_clicked)
-            slot.double_clicked.connect(self._on_slot_double_clicked)
-            slot.close_requested.connect(self._on_slot_close_requested)
-            slot.capture_requested.connect(self._on_slot_capture)
-            slot.record_toggle_requested.connect(self._on_slot_record_toggle)
-            slot.resized.connect(self._on_slot_resized)
-            self.video_slots.append(slot)
+        # Initially create only the visible 4 slots for instant startup; extra slots are created lazily on split switch
+        self._ensure_slots(self.current_layout_count)
 
         content_splitter.addWidget(self.grid_container)
 
@@ -284,9 +280,24 @@ class LiveViewWidget(QWidget):
     def _toggle_ptz_panel(self, checked: bool):
         self.ptz_panel.setVisible(checked)
 
+    def _ensure_slots(self, count: int):
+        """Lazily instantiate VideoWidget slots up to `count` so startup stays fast."""
+        target = min(count, self.max_slots)
+        while len(self.video_slots) < target:
+            i = len(self.video_slots)
+            slot = VideoWidget(slot_id=i, parent=self.grid_container)
+            slot.clicked.connect(self._on_slot_clicked)
+            slot.double_clicked.connect(self._on_slot_double_clicked)
+            slot.close_requested.connect(self._on_slot_close_requested)
+            slot.capture_requested.connect(self._on_slot_capture)
+            slot.record_toggle_requested.connect(self._on_slot_record_toggle)
+            slot.resized.connect(self._on_slot_resized)
+            self.video_slots.append(slot)
+
     def switch_layout(self, count: int):
         """Switch grid layout: 1, 4, 9, 16, 25, or 32 screens."""
         self.current_layout_count = count
+        self._ensure_slots(count)
         self.is_single_maximized = False
 
         # In 25 or 32 screen split mode, automatically hide PTZ panel to maximize viewing area
@@ -387,8 +398,28 @@ class LiveViewWidget(QWidget):
                 slot_widget.set_stream_info(slot.channel_name, "切换码流失败")
 
     def toggle_fullscreen(self):
-        """Toggle fullscreen mode for currently active slot."""
-        self._on_slot_double_clicked(self.active_slot_id)
+        """Request true OS fullscreen mode for the surveillance viewport."""
+        self.fullscreen_requested.emit()
+
+    def set_fullscreen_mode(self, enabled: bool):
+        """Hide/restore internal chrome when main window enters or exits fullscreen."""
+        if hasattr(self, "top_bar"):
+            self.top_bar.setVisible(not enabled)
+        if hasattr(self, "ptz_panel"):
+            if enabled:
+                self.ptz_panel.setVisible(False)
+            else:
+                ptz_checked = self.btn_ptz_toggle.isChecked() if hasattr(self, "btn_ptz_toggle") else True
+                self.ptz_panel.setVisible(ptz_checked)
+        if hasattr(self, "_main_layout"):
+            if enabled:
+                self._main_layout.setContentsMargins(0, 0, 0, 0)
+                self._main_layout.setSpacing(0)
+            else:
+                self._main_layout.setContentsMargins(4, 4, 4, 4)
+                self._main_layout.setSpacing(4)
+        if hasattr(self, "btn_fullscreen"):
+            self.btn_fullscreen.setText("⛶ 退出全屏" if enabled else "⛶ 全屏显示")
 
     def _reopen_slot_if_playing(self, slot_id: int):
         """Reopen playing stream on slot to force SDK hardware decoder to re-bind to new dimensions."""
@@ -397,7 +428,14 @@ class LiveViewWidget(QWidget):
             w_id = self.video_slots[slot_id].get_win_id()
             self.player_controller.reopen_live_play(slot_id, win_id=w_id)
 
-    def play_channel_in_slot(self, device_id: str, channel_no: int, channel_name: str, slot_id: Optional[int] = None):
+    def play_channel_in_slot(
+        self,
+        device_id: str,
+        channel_no: int,
+        channel_name: str,
+        slot_id: Optional[int] = None,
+        advance_focus: bool = True,
+    ):
         """Start playing channel in the active or specified slot."""
         target_slot_id = slot_id if slot_id is not None else self.active_slot_id
         slot_widget = self.video_slots[target_slot_id]
@@ -426,8 +464,34 @@ class LiveViewWidget(QWidget):
 
         if ok:
             slot_widget.set_stream_info(channel_name, "实时预览中 (主码流)" if stream_type == 0 else "实时预览中 (子码流)")
+            if advance_focus and not self.is_single_maximized and self.current_layout_count > 1:
+                next_slot = (target_slot_id + 1) % self.current_layout_count
+                self.select_slot(next_slot)
         else:
             slot_widget.set_stream_info(channel_name, "预览连接失败")
+
+    def play_device_channels(self, device_id: str, channels: list) -> int:
+        """Batch-load up to current_layout_count enabled channels of a device into split slots."""
+        if self.is_single_maximized:
+            self.switch_layout(self.saved_layout_count)
+
+        enabled_chs = [ch for ch in channels if getattr(ch, "is_enabled", True)]
+        if not enabled_chs:
+            return 0
+
+        target_chs = enabled_chs[:self.current_layout_count]
+        for idx, ch in enumerate(target_chs):
+            self.play_channel_in_slot(
+                device_id=device_id,
+                channel_no=ch.channel_no,
+                channel_name=ch.name,
+                slot_id=idx,
+                advance_focus=False,
+            )
+
+        if self.current_layout_count > 1:
+            self.select_slot(len(target_chs) % self.current_layout_count)
+        return len(target_chs)
 
     def _on_slot_clicked(self, slot_id: int):
         self.select_slot(slot_id)
@@ -544,6 +608,6 @@ class LiveViewWidget(QWidget):
         self._on_slot_record_toggle(self.active_slot_id)
 
     def stop_all_slots(self):
-        for i in range(self.max_slots):
+        for i in range(len(self.video_slots)):
             self.player_controller.stop_slot(i)
             self.video_slots[i].clear_stream()
