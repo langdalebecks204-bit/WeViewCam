@@ -34,8 +34,8 @@ class LiveViewWidget(QWidget):
         self.max_slots = 32
         self.video_slots: List[VideoWidget] = []
         self.active_slot_id = 0
-        self.current_layout_count = 4  # Default 4-split (2x2)
-        self.saved_layout_count = 4
+        self.current_layout_count = 1  # Default 1-split
+        self.saved_layout_count = 1
         self.is_single_maximized = False
 
         self._init_ui()
@@ -123,7 +123,7 @@ class LiveViewWidget(QWidget):
 
         self.btn_ptz_toggle = QPushButton("🎮 云台面板", top_bar)
         self.btn_ptz_toggle.setCheckable(True)
-        self.btn_ptz_toggle.setChecked(True)
+        self.btn_ptz_toggle.setChecked(False)
         self.btn_ptz_toggle.toggled.connect(self._toggle_ptz_panel)
         top_layout.addWidget(self.btn_ptz_toggle)
 
@@ -143,16 +143,17 @@ class LiveViewWidget(QWidget):
 
         content_splitter.addWidget(self.grid_container)
 
-        # Right PTZ Control Panel
+        # Right PTZ Control Panel (collapsed by default)
         self.ptz_panel = self._create_ptz_panel(content_splitter)
+        self.ptz_panel.setVisible(False)
         content_splitter.addWidget(self.ptz_panel)
 
         content_splitter.setStretchFactor(0, 1)
         content_splitter.setStretchFactor(1, 0)
         main_layout.addWidget(content_splitter, 1)
 
-        # Apply initial 4-screen layout
-        self.switch_layout(4)
+        # Apply initial 1-screen layout
+        self.switch_layout(1)
         self.select_slot(0)
 
     def _create_ptz_panel(self, parent) -> QWidget:
@@ -292,6 +293,8 @@ class LiveViewWidget(QWidget):
             slot.capture_requested.connect(self._on_slot_capture)
             slot.record_toggle_requested.connect(self._on_slot_record_toggle)
             slot.resized.connect(self._on_slot_resized)
+            slot.swap_requested.connect(self._on_slot_swap_requested)
+            slot.channel_dropped.connect(self._on_slot_channel_dropped)
             self.video_slots.append(slot)
 
     def switch_layout(self, count: int):
@@ -427,6 +430,48 @@ class LiveViewWidget(QWidget):
         if slot and slot.is_live:
             w_id = self.video_slots[slot_id].get_win_id()
             self.player_controller.reopen_live_play(slot_id, win_id=w_id)
+
+    def _on_slot_swap_requested(self, src_slot_id: int, dst_slot_id: int):
+        """Move or swap live video stream when user drags one video tile onto another."""
+        if src_slot_id == dst_slot_id:
+            return
+        if not (0 <= src_slot_id < len(self.video_slots) and 0 <= dst_slot_id < len(self.video_slots)):
+            return
+
+        src_widget = self.video_slots[src_slot_id]
+        dst_widget = self.video_slots[dst_slot_id]
+        ok_dst, ok_src = self.player_controller.move_or_swap_live_slots(
+            src_slot_id=src_slot_id,
+            dst_slot_id=dst_slot_id,
+            src_win_id=src_widget.get_win_id(),
+            dst_win_id=dst_widget.get_win_id(),
+        )
+
+        dst_state = self.player_controller.get_slot_state(dst_slot_id)
+        if ok_dst and dst_state.is_live:
+            st_text = "实时预览中 (主码流)" if dst_state.stream_type == 0 else "实时预览中 (子码流)"
+            dst_widget.set_stream_info(dst_state.channel_name, st_text)
+        elif not dst_state.is_live:
+            dst_widget.clear_stream()
+
+        src_state = self.player_controller.get_slot_state(src_slot_id)
+        if ok_src and src_state.is_live:
+            st_text = "实时预览中 (主码流)" if src_state.stream_type == 0 else "实时预览中 (子码流)"
+            src_widget.set_stream_info(src_state.channel_name, st_text)
+        else:
+            src_widget.clear_stream()
+
+        self.select_slot(dst_slot_id)
+
+    def _on_slot_channel_dropped(self, slot_id: int, device_id: str, channel_no: int, channel_name: str):
+        """Play a channel dragged from the left device tree directly into the target slot."""
+        self.play_channel_in_slot(
+            device_id=device_id,
+            channel_no=channel_no,
+            channel_name=channel_name,
+            slot_id=slot_id,
+            advance_focus=False,
+        )
 
     def play_channel_in_slot(
         self,

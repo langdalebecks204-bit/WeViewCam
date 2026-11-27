@@ -4,17 +4,42 @@ Device & Channel Navigation Tree.
 Lists configured devices and their camera channels with quick double-click-to-play support.
 """
 
+import json
 import logging
 import os
 from typing import Optional, List, Set
 
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QThread, QSettings
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QTimer, QThread, QSettings, QMimeData
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
+    QAbstractItemView, QWidget, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem,
     QPushButton, QLabel, QMenu, QMessageBox, QDialog, QListWidget,
     QListWidgetItem, QFileDialog, QApplication
 )
-from PyQt5.QtGui import QIcon, QColor, QBrush, QPixmap, QPainter, QPen
+from PyQt5.QtGui import QIcon, QColor, QBrush, QPixmap, QPainter, QPen, QDrag
+
+_CHANNEL_MIME_TYPE = "application/x-weviewcam-channel"
+
+
+class DraggableChannelTree(QTreeWidget):
+    """QTreeWidget that serializes channel items as custom MIME data for drag-to-play."""
+
+    def startDrag(self, supportedActions):
+        item = self.currentItem()
+        if not item:
+            return
+        data = item.data(0, Qt.UserRole)
+        if not data or data.get("type") != "channel":
+            return
+        payload = json.dumps({
+            "device_id": data.get("device_id", ""),
+            "channel_no": int(data.get("channel_no", 0)),
+            "channel_name": data.get("channel_name", ""),
+        }, ensure_ascii=False).encode("utf-8")
+        mime = QMimeData()
+        mime.setData(_CHANNEL_MIME_TYPE, payload)
+        drag = QDrag(self)
+        drag.setMimeData(mime)
+        drag.exec_(Qt.CopyAction)
 from core.base_adapter import DeviceInfo, ChannelInfo, ProtocolType
 from core.device_manager import DeviceManager
 
@@ -338,10 +363,12 @@ class DeviceTreeWidget(QWidget):
         layout.addLayout(header_layout)
 
         # Tree Widget
-        self.tree = QTreeWidget(self)
+        self.tree = DraggableChannelTree(self)
         self.tree.setHeaderHidden(True)
         self.tree.setAnimated(True)
         self.tree.setIconSize(QSize(14, 14))
+        self.tree.setDragEnabled(True)
+        self.tree.setDragDropMode(QAbstractItemView.DragOnly)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
         self.tree.itemDoubleClicked.connect(self._on_item_double_clicked)

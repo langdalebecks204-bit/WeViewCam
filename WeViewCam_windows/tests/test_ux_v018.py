@@ -56,6 +56,8 @@ def test_auto_advance_slot_focus_on_play(qapp):
     pc.start_live_play.return_value = True
 
     lv = LiveViewWidget(pc)
+    assert lv.current_layout_count == 1
+    lv.switch_layout(4)
     assert lv.current_layout_count == 4
     assert lv.active_slot_id == 0
 
@@ -146,5 +148,5 @@ def test_true_video_fullscreen_toggles_chrome_and_window_state(qapp):
     assert win.status_bar.isVisible()
     assert win.device_tree.isVisible()
     assert win.live_view.top_bar.isVisible()
-    assert win.live_view.ptz_panel.isVisible()
+    assert win.live_view.ptz_panel.isVisible() == win.live_view.btn_ptz_toggle.isChecked()
     win.close()

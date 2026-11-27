@@ -6,7 +6,7 @@ Orchestrates multiple video viewing slots, mapping display windows to active str
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from core.base_adapter import (
     BaseDeviceAdapter,
@@ -107,6 +107,52 @@ class PlayerController:
 
         logger.info(f"槽位 [{slot_id}] 开始实时预览: {slot.channel_name} (句柄: {play_handle})")
         return True
+
+    def move_or_swap_live_slots(
+        self,
+        src_slot_id: int,
+        dst_slot_id: int,
+        src_win_id: int = 0,
+        dst_win_id: int = 0,
+    ) -> Tuple[bool, bool]:
+        """Move a live stream to an idle slot or swap two live slots cleanly."""
+        if src_slot_id == dst_slot_id:
+            return False, False
+        src = self.get_slot_state(src_slot_id)
+        if not src.is_live:
+            return False, False
+        dst = self.get_slot_state(dst_slot_id)
+
+        src_info = (src.device_id, src.channel_no, src.channel_name, src.stream_type)
+        dst_was_live = dst.is_live
+        dst_info = (dst.device_id, dst.channel_no, dst.channel_name, dst.stream_type) if dst_was_live else None
+
+        self.stop_slot(src_slot_id)
+        if dst.is_live or dst.is_playback:
+            self.stop_slot(dst_slot_id)
+
+        import time
+        time.sleep(0.15)
+
+        ok_dst = self.start_live_play(
+            slot_id=dst_slot_id,
+            device_id=src_info[0],
+            channel_no=src_info[1],
+            win_id=dst_win_id,
+            stream_type=src_info[3],
+            channel_name=src_info[2],
+        )
+        ok_src = False
+        if dst_was_live and dst_info is not None:
+            ok_src = self.start_live_play(
+                slot_id=src_slot_id,
+                device_id=dst_info[0],
+                channel_no=dst_info[1],
+                win_id=src_win_id,
+                stream_type=dst_info[3],
+                channel_name=dst_info[2],
+            )
+        return ok_dst, ok_src
 
     def start_playback(
         self,
@@ -220,6 +266,19 @@ class PlayerController:
         slot.channel_no = 0
         slot.channel_name = ""
         return True
+
+    def stop_device_slots(self, device_id: str) -> List[int]:
+        """Stop all active live/playback slots for a device before logout/reconnect."""
+        stopped: List[int] = []
+        for slot_id, slot in list(self._slots.items()):
+            if slot.device_id == device_id and (slot.is_live or slot.is_playback):
+                self.stop_slot(slot_id)
+                stopped.append(slot_id)
+        if stopped:
+            import time
+            time.sleep(0.15)
+            logger.info(f"设备 [{device_id}] 断开/重连前已安全停止视口: {stopped}")
+        return stopped
 
     def capture_slot(self, slot_id: int, save_path: str) -> bool:
         """Capture screenshot from video stream in slot."""

@@ -238,12 +238,7 @@ class DahuaNativeDriver:
     def get_channels(self, login_id: int, device_info: Optional[Any] = None) -> List[ChannelInfo]:
         """Enumerate camera channels for Dahua device with online status and real channel names."""
         if not self.is_available or login_id <= 0:
-            return [
-                ChannelInfo(channel_no=1, name="大华枪机-正门", is_online=True, is_ptz=False),
-                ChannelInfo(channel_no=2, name="大华球机-园区东", is_online=True, is_ptz=True),
-                ChannelInfo(channel_no=3, name="大华半球-大厅", is_online=True, is_ptz=False),
-                ChannelInfo(channel_no=4, name="大华枪机-仓库", is_online=True, is_ptz=False),
-            ]
+            return []
 
         n_chans = 0
         if device_info:

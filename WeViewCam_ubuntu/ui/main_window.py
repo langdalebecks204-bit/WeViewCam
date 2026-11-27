@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
         # Core controllers (defer device loading until after main window is visible)
         self.device_manager = DeviceManager(auto_load=False)
         self.player_controller = PlayerController(self.device_manager)
+        self.device_manager.register_before_disconnect_callback(self._on_before_device_disconnect)
 
         self._pre_fullscreen_maximized = False
         self._is_video_fullscreen = False
@@ -210,6 +211,14 @@ class MainWindow(QMainWindow):
 
         if index == 1 and self.playback_view is not None:
             self.playback_view.refresh_devices_combo()
+
+    def _on_before_device_disconnect(self, device_id: str):
+        """Stop all live/playback streams bound to device_id before SDK logout/reconnect."""
+        stopped_ids = self.player_controller.stop_device_slots(device_id)
+        if hasattr(self, "live_view") and self.live_view is not None:
+            for sid in stopped_ids:
+                if 0 <= sid < len(self.live_view.video_slots):
+                    self.live_view.video_slots[sid].clear_stream()
 
     def _on_channel_double_clicked(self, device_id: str, channel_no: int, channel_name: str):
         """Play channel in active slot."""

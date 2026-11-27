@@ -4,15 +4,19 @@ Single Video Tile Widget.
 Hosts native X11 window surface for direct hardware rendering, OSD overlay, and user interaction.
 """
 
+import json
 import os
 from datetime import datetime
 from typing import Optional
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QTimer, QMimeData
 from PyQt5.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QFrame, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QMenu, QWidget, QSizePolicy, QFileDialog, QMessageBox
 )
-from PyQt5.QtGui import QMouseEvent, QColor, QPalette, QPainter, QFont, QImage
+from PyQt5.QtGui import QMouseEvent, QColor, QPalette, QPainter, QFont, QImage, QDrag
+
+_SLOT_MIME_TYPE = "application/x-weviewcam-slot"
+_CHANNEL_MIME_TYPE = "application/x-weviewcam-channel"
 
 
 class VideoSurface(QWidget):
@@ -36,6 +40,7 @@ class VideoSurface(QWidget):
         self.setAttribute(Qt.WA_NativeWindow, True)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WA_OpaquePaintEvent, True)
+        self.setAcceptDrops(True)
         self.setStyleSheet("background-color: #0a0c10;")
         self._win_id = int(self.winId())
 
@@ -75,6 +80,33 @@ class VideoSurface(QWidget):
             self.setStyleSheet("background-color: #0a0c10;")
             self.update()
             self.repaint()
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if self.parent() is not None:
+            self.parent().mousePressEvent(event)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.parent() is not None:
+            self.parent().mouseMoveEvent(event)
+        super().mouseMoveEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent):
+        if self.parent() is not None:
+            self.parent().mouseDoubleClickEvent(event)
+        super().mouseDoubleClickEvent(event)
+
+    def dragEnterEvent(self, event):
+        if self.parent() is not None:
+            self.parent().dragEnterEvent(event)
+        else:
+            super().dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        if self.parent() is not None:
+            self.parent().dropEvent(event)
+        else:
+            super().dropEvent(event)
 
     def paintEvent(self, event):
         # 1. If we have active software/OpenCV decoded frames, paint frame keeping aspect ratio
@@ -121,6 +153,8 @@ class VideoWidget(QFrame):
     capture_requested = pyqtSignal(int, str)  # slot_id, save_path
     record_toggle_requested = pyqtSignal(int) # slot_id
     resized = pyqtSignal(int)                 # Emits slot_id when resized
+    swap_requested = pyqtSignal(int, int)     # Emits (src_slot_id, dst_slot_id) on drag-drop
+    channel_dropped = pyqtSignal(int, str, int, str)  # slot_id, device_id, channel_no, channel_name
 
 
     def __init__(self, slot_id: int, parent=None):
@@ -131,12 +165,14 @@ class VideoWidget(QFrame):
         self._is_recording = False
         self._channel_name = ""
         self._status_text = "空闲"
+        self._drag_start_pos: Optional[QPoint] = None
 
         self.setObjectName("videoSlot")
         self.setProperty("class", "videoSlot")
         self.setFrameShape(QFrame.StyledPanel)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumSize(160, 120)
+        self.setAcceptDrops(True)
 
         self._init_ui()
 
@@ -260,8 +296,60 @@ class VideoWidget(QFrame):
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
+            self._drag_start_pos = event.pos()
             self.clicked.emit(self.slot_id)
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if (
+            self.is_playing
+            and (event.buttons() & Qt.LeftButton)
+            and self._drag_start_pos is not None
+            and (event.pos() - self._drag_start_pos).manhattanLength() >= QApplication.startDragDistance()
+        ):
+            drag = QDrag(self)
+            mime = QMimeData()
+            mime.setData(_SLOT_MIME_TYPE, str(self.slot_id).encode("utf-8"))
+            drag.setMimeData(mime)
+            self._drag_start_pos = None
+            drag.exec_(Qt.MoveAction)
+            return
+        super().mouseMoveEvent(event)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat(_CHANNEL_MIME_TYPE):
+            event.acceptProposedAction()
+            return
+        if event.mimeData().hasFormat(_SLOT_MIME_TYPE):
+            src_bytes = bytes(event.mimeData().data(_SLOT_MIME_TYPE)).decode("utf-8", errors="ignore")
+            if src_bytes.isdigit() and int(src_bytes) != self.slot_id:
+                event.acceptProposedAction()
+                return
+        event.ignore()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasFormat(_CHANNEL_MIME_TYPE):
+            try:
+                raw = bytes(event.mimeData().data(_CHANNEL_MIME_TYPE)).decode("utf-8")
+                info = json.loads(raw)
+                dev_id = str(info.get("device_id") or "")
+                ch_no = int(info.get("channel_no") or 0)
+                ch_name = str(info.get("channel_name") or "")
+                if dev_id and ch_no > 0:
+                    self.channel_dropped.emit(self.slot_id, dev_id, ch_no, ch_name)
+                    event.acceptProposedAction()
+                    return
+            except Exception:
+                pass
+        if event.mimeData().hasFormat(_SLOT_MIME_TYPE):
+            src_bytes = bytes(event.mimeData().data(_SLOT_MIME_TYPE)).decode("utf-8", errors="ignore")
+            if src_bytes.isdigit():
+                src_id = int(src_bytes)
+                if src_id != self.slot_id:
+                    self.swap_requested.emit(src_id, self.slot_id)
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

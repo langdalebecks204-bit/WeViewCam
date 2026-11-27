@@ -61,10 +61,9 @@ def test_hikvision_adapter_lifecycle():
     assert adapter.login() is True
     assert adapter.is_connected is True
 
-    # Get channels
+    # Get channels (no fake demo channels when SDK is unavailable)
     channels = adapter.get_channels()
-    assert len(channels) > 0
-    assert channels[0].channel_no >= 1
+    assert isinstance(channels, list)
 
     # Real play
     play_handle = adapter.start_real_play(channel_no=1, win_id=0, stream_type=0)
@@ -114,10 +113,9 @@ def test_dahua_adapter_lifecycle():
     assert dh_adapter.login() is True
     assert dh_adapter.is_connected is True
 
-    # Channels
+    # Channels (no fake demo channels when SDK is unavailable)
     channels = dh_adapter.get_channels()
-    assert len(channels) > 0
-    assert channels[0].device_id == "dh_test_lifecycle"
+    assert isinstance(channels, list)
 
     # Real play
     play_h = dh_adapter.start_real_play(channel_no=1, win_id=1001)

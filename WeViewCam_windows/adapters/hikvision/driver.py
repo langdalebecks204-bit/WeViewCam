@@ -372,12 +372,7 @@ class HikvisionNativeDriver:
 
     def get_channels(self, user_id: int, device_info: Optional[Any] = None) -> List[ChannelInfo]:
         if not self.is_available or user_id < 0:
-            return [
-                ChannelInfo(channel_no=1, name="海康球机-正门", is_online=True, is_ptz=True),
-                ChannelInfo(channel_no=2, name="海康枪机-周界东", is_online=True, is_ptz=False),
-                ChannelInfo(channel_no=3, name="海康枪机-周界西", is_online=True, is_ptz=False),
-                ChannelInfo(channel_no=4, name="海康半球-大厅入口", is_online=True, is_ptz=False),
-            ]
+            return []
 
         channels = []
         dig_online_map = {}

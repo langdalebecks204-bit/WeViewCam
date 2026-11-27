@@ -8,7 +8,7 @@ import json
 import os
 import sys
 import uuid
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Callable, Dict, List, Optional, Tuple, Any
 
 from core.base_adapter import (
     BaseDeviceAdapter,
@@ -34,8 +34,21 @@ class DeviceManager:
         self.config_path = config_path
         self._devices: Dict[str, DeviceInfo] = {}
         self._adapters: Dict[str, BaseDeviceAdapter] = {}
+        self._before_disconnect_callbacks: List[Callable[[str], None]] = []
         if auto_load:
             self.load_devices()
+
+    def register_before_disconnect_callback(self, callback: Callable[[str], None]) -> None:
+        """Register a hook invoked before a device adapter logs out (e.g. to stop active streams)."""
+        if callback not in self._before_disconnect_callbacks:
+            self._before_disconnect_callbacks.append(callback)
+
+    def _notify_before_disconnect(self, device_id: str) -> None:
+        for cb in list(self._before_disconnect_callbacks):
+            try:
+                cb(device_id)
+            except Exception as e:
+                logger.warning(f"before_disconnect 回调异常 ({device_id}): {e}")
 
     def create_adapter(self, device_info: DeviceInfo) -> BaseDeviceAdapter:
         """Factory method to instantiate the correct vendor adapter."""
@@ -145,10 +158,7 @@ class DeviceManager:
                         target.name = inc_ch.name
                     elif not cls._is_custom_name(target.name) and inc_ch.name:
                         target.name = inc_ch.name
-                    if not getattr(target, "is_enabled", True):
-                        target.is_enabled = False
-                    else:
-                        target.is_enabled = getattr(inc_ch, "is_enabled", True)
+                    target.is_enabled = cls._merge_enabled_state(target, inc_ch)
                     target.is_ptz = getattr(inc_ch, "is_ptz", target.is_ptz)
                     target.is_online = getattr(inc_ch, "is_online", target.is_online)
                     if getattr(inc_ch, "extra", None):
@@ -169,10 +179,7 @@ class DeviceManager:
                         target.name = base_ch.name
                     elif not cls._is_custom_name(target.name) and base_ch.name:
                         target.name = base_ch.name
-                    if not getattr(base_ch, "is_enabled", True):
-                        target.is_enabled = False
-                    else:
-                        target.is_enabled = getattr(target, "is_enabled", True)
+                    target.is_enabled = cls._merge_enabled_state(base_ch, target)
                     target.is_ptz = getattr(base_ch, "is_ptz", target.is_ptz)
             result = list(inc_map.values())
 
@@ -186,10 +193,7 @@ class DeviceManager:
                         target.name = inc_ch.name
                     elif not cls._is_custom_name(target.name) and inc_ch.name:
                         target.name = inc_ch.name
-                    if not getattr(target, "is_enabled", True):
-                        target.is_enabled = False
-                    else:
-                        target.is_enabled = getattr(inc_ch, "is_enabled", True)
+                    target.is_enabled = cls._merge_enabled_state(target, inc_ch)
                     target.is_ptz = getattr(inc_ch, "is_ptz", target.is_ptz)
                     target.is_online = getattr(inc_ch, "is_online", target.is_online)
                     if getattr(inc_ch, "extra", None):
@@ -199,6 +203,21 @@ class DeviceManager:
             result = list(base_map.values())
 
         return cls._deduplicate_channels(result)
+
+    @staticmethod
+    def _merge_enabled_state(existing_ch: ChannelInfo, incoming_ch: ChannelInfo) -> bool:
+        """Preserve user-disabled channels, but auto-enable newly attached/online NVR channels."""
+        if getattr(existing_ch, "is_enabled", True):
+            return getattr(incoming_ch, "is_enabled", True)
+        was_inactive = (not getattr(existing_ch, "is_online", True)) or bool(
+            (getattr(existing_ch, "extra", None) or {}).get("unattached", False)
+        )
+        now_active = (
+            getattr(incoming_ch, "is_enabled", True)
+            and getattr(incoming_ch, "is_online", True)
+            and not bool((getattr(incoming_ch, "extra", None) or {}).get("unattached", False))
+        )
+        return True if (was_inactive and now_active) else False
 
     @classmethod
     def _merge_channels_preserving_custom(
@@ -243,8 +262,9 @@ class DeviceManager:
         if device.device_id not in self._devices:
             return False
 
-        # If already connected, logout first
+        # If already connected, stop active streams and logout first
         if device.device_id in self._adapters:
+            self._notify_before_disconnect(device.device_id)
             try:
                 self._adapters[device.device_id].logout()
             except Exception as e:
@@ -258,6 +278,7 @@ class DeviceManager:
     def remove_device(self, device_id: str) -> bool:
         """Disconnect and remove device."""
         if device_id in self._adapters:
+            self._notify_before_disconnect(device_id)
             try:
                 self._adapters[device_id].logout()
             except Exception as e:
@@ -295,6 +316,13 @@ class DeviceManager:
         if adapter.is_connected and not force_refresh and dev.channels:
             dev.is_connected = True
             return True
+
+        if force_refresh and adapter.is_connected:
+            self._notify_before_disconnect(device_id)
+            try:
+                adapter.logout()
+            except Exception as e:
+                logger.warning(f"强制重连前注销异常 ({device_id}): {e}")
 
         if not adapter.is_connected:
             success = adapter.login()
@@ -442,6 +470,7 @@ class DeviceManager:
         if not dev:
             return False
 
+        self._notify_before_disconnect(device_id)
         adapter = self._adapters.get(device_id)
         if adapter:
             adapter.logout()
